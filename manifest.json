@@ -1,0 +1,15 @@
+{
+  "name": "Badminton Rotation",
+  "short_name": "Badminton",
+  "description": "Rotation, teams and points for a casual 2v2 badminton session",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0d1117",
+  "theme_color": "#0d1117",
+  "icons": [
+    { "src": "icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
