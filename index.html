@@ -323,11 +323,16 @@ function activeForced(){
   return f;
 }
 
+// Courts in Settings is a MAXIMUM — a round uses as many as the players present can fill.
+function activeCourts(){
+  return clamp(Math.min(S.settings.courts,Math.floor(S.players.length/4)),0,20);
+}
+
 function generateRound(keepLocks){
   const st=stats(), str=strengths(st);
-  const courts=clamp(S.settings.courts,1,20);
+  const courts=activeCourts();
+  if(courts<1)return{error:`A doubles court needs 4 players — you have ${S.players.length}.`};
   const need=courts*4;
-  if(S.players.length<need)return{error:`Need ${need} players for ${courts} court${courts>1?'s':''} — you have ${S.players.length}.`};
 
   const f=activeForced();
   const fixed=[];                                   // whole courts that are pre-set
@@ -516,7 +521,7 @@ function render(){
   $('#hTitle').textContent = !S.started?'New Session' : tab==='game'?(S.current?'Round '+S.current.n:'Session'):
       TABS.find(t=>t[0]===tab)[1];
   $('#hSub').textContent = !S.started?'Enter players in skill order'
-      : `${S.players.length} players · ${S.settings.courts} court${S.settings.courts>1?'s':''} · ${roundsDone()} round${roundsDone()===1?'':'s'} played`;
+      : `${S.players.length} players · ${activeCourts()||'no'} court${activeCourts()===1?'':'s'} · ${roundsDone()} round${roundsDone()===1?'':'s'} played`;
   $('#hRight').innerHTML = S.started&&tab!=='settings'
       ? `<span class="tag ${isCompetitive()?'r':'b'}">${isCompetitive()?'Competitive':'Warm-up'}</span>`:'';
   const app=$('#app');
@@ -534,7 +539,7 @@ function go(t){tab=t;sel=null;window.scrollTo(0,0);render()}
 
 /* ---------------- setup -------------------------------------------------- */
 function viewSetup(){
-  const n=S.players.length, c=S.settings.courts, playing=Math.min(n,c*4);
+  const n=S.players.length, c=S.settings.courts, ac=activeCourts(), playing=ac*4;
   return `
   <div class="card">
     <div class="row" style="margin-bottom:10px">
@@ -563,18 +568,21 @@ function viewSetup(){
       <button class="btn" style="flex:none;width:56px" onclick="setCourts(-1)">−</button>
       <div style="flex:1;text-align:center">
         <div style="font-size:34px;font-weight:900;line-height:1">${c}</div>
-        <div class="mini">Courts</div>
+        <div class="mini">Courts available</div>
       </div>
       <button class="btn" style="flex:none;width:56px" onclick="setCourts(1)">+</button>
     </div>
     <div class="row" style="margin-top:12px;justify-content:space-around;text-align:center">
       <div><div style="font-weight:800;font-size:18px">${playing}</div><div class="mini">Playing</div></div>
-      <div><div style="font-weight:800;font-size:18px;color:${n-playing>0?'var(--warn)':'var(--dim2)'}">${Math.max(0,n-c*4)}</div><div class="mini">Resting</div></div>
-      <div><div style="font-weight:800;font-size:18px">${c*4}</div><div class="mini">Slots</div></div>
+      <div><div style="font-weight:800;font-size:18px;color:${n-playing>0?'var(--warn)':'var(--dim2)'}">${Math.max(0,n-playing)}</div><div class="mini">Resting</div></div>
+      <div><div style="font-weight:800;font-size:18px">${ac}</div><div class="mini">Courts in use</div></div>
     </div>
   </div>
-  ${n<c*4?`<div class="note err">Need ${c*4} players for ${c} court${c>1?'s':''} — ${c*4-n} more to go.</div>`:''}
-  <button class="btn pri full" style="margin-top:6px" onclick="startSession()" ${n<c*4?'disabled':''}>Start Session</button>
+  ${!n?''
+   : n<4 ? `<div class="note">A doubles court needs 4 players — ${4-n} more and you can play. You can still start now and add people as they turn up.</div>`
+   : ac<c ? `<div class="note">${n} players fills <b>${ac} court${ac>1?'s':''}</b>${n-playing?` with ${n-playing} resting each round`:''}. Courts is a maximum — the app only uses what you can fill.</div>`
+   : ''}
+  <button class="btn pri full" style="margin-top:6px" onclick="startSession()" ${n?'':'disabled'}>Start Session</button>
   <button class="btn gho full" style="margin-top:10px" onclick="loadDemo()">Load 8 example players</button>
   ${localStorage.getItem(LS)?`<button class="btn dan full" style="margin-top:10px" onclick="hardReset()">Reset all saved data</button>`:''}
   `;
@@ -582,11 +590,16 @@ function viewSetup(){
 
 /* ---------------- game --------------------------------------------------- */
 function viewGame(st){
+  if(activeCourts()<1){
+    const n=S.players.length;
+    return `<div class="card"><div class="empty"><b>${n?'Waiting for players':'No players yet'}</b>
+      A doubles court needs 4. You have ${n} — ${4-n} more to start a round.</div></div>
+      <button class="btn pri full" onclick="go('players')">Add players</button>`;
+  }
   if(!S.current){
     const r=generateRound(false);
     if(r.error)return `<div class="note err">${esc(r.error)}</div>
-      <button class="btn full" onclick="go('settings')">Change court count</button>
-      <button class="btn full" style="margin-top:10px" onclick="go('players')">Add players</button>`;
+      <button class="btn full" onclick="go('players')">Add players</button>`;
     S.current=r.round;
   }
   const cur=S.current, str=strengths(st), draft=!cur.confirmed;
@@ -894,7 +907,7 @@ function viewSettings(){
   return `
   <div class="sec-h">Session</div>
   <div class="card">
-    <div class="sl"><span class="lab">Courts<small>Takes effect on the next generated round</small></span>
+    <div class="sl"><span class="lab">Courts available<small>A maximum — rounds only use what your players can fill (4 each)</small></span>
       <input type="number" min="1" max="12" value="${s.courts}" onchange="setSetting('courts',clamp(+this.value||1,1,12))"></div>
     <div class="sl"><span class="lab">Combined match score<small>Losing score = total − winning score</small></span>
       <input type="number" min="5" max="99" value="${s.total}" onchange="setSetting('total',clamp(+this.value||21,5,99))"></div>
@@ -981,7 +994,7 @@ function setSetting(k,v){
   render();
 }
 function startSession(){
-  if(S.players.length<S.settings.courts*4)return;
+  if(!S.players.length)return;
   S.started=true;S.rounds=[];S.current=null;S.forced={pairs:[],match:null};tab='game';
   render();toast('Session started — good luck!');
 }

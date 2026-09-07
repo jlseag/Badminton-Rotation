@@ -27,7 +27,9 @@ JSON backup, and **Import session** to move a session to another device.
 1. **Players** — type everyone in from *strongest to weakest*. That order is their
    Initial Skill Rank and is what balances the first few rounds. Drag or use ↑ ↓ to reorder.
 2. **Courts** — pick how many. Each court is 4 players; anyone left over rests that round.
-3. **Start Session** — round 1 is generated.
+3. **Start Session** — round 1 is generated. Courts is a *maximum*: the app runs as many
+   courts as the people present can fill (4 each) and rests the remainder, so 6 players on
+   2 courts simply plays 1 court with 2 resting. It adapts every round as people arrive or leave.
 4. **Adjust if you want** — tap any two players to swap them (including a resting player),
    lock a pair or a whole court, or add a Custom Pairing. Nothing is recorded while you edit.
 5. **Confirm Round** — teams become official.
