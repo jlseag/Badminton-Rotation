@@ -1,0 +1,99 @@
+{
+  "v": 1,
+  "started": true,
+  "players": [
+    {
+      "id": "pclg7wiz",
+      "name": "Seag",
+      "addedRound": 1
+    },
+    {
+      "id": "pnnc0vcb",
+      "name": "Phil",
+      "addedRound": 1
+    },
+    {
+      "id": "ph73i13q",
+      "name": "Remy",
+      "addedRound": 1
+    },
+    {
+      "id": "pnxp9lcb",
+      "name": "Aurel",
+      "addedRound": 1
+    },
+    {
+      "id": "pu5kwcph",
+      "name": "Sam",
+      "addedRound": 1
+    },
+    {
+      "id": "pzti9xwc",
+      "name": "Nadia",
+      "addedRound": 1
+    },
+    {
+      "id": "ppw3pkho",
+      "name": "Kayla",
+      "addedRound": 1
+    },
+    {
+      "id": "p98wltoa",
+      "name": "Oscar",
+      "addedRound": 1
+    }
+  ],
+  "rounds": [],
+  "current": {
+    "n": 1,
+    "courts": [
+      {
+        "a": [
+          "ph73i13q",
+          "pzti9xwc"
+        ],
+        "b": [
+          "pnxp9lcb",
+          "pu5kwcph"
+        ],
+        "locked": false,
+        "forced": false,
+        "winner": null,
+        "winScore": null
+      },
+      {
+        "a": [
+          "pnnc0vcb",
+          "ppw3pkho"
+        ],
+        "b": [
+          "p98wltoa",
+          "pclg7wiz"
+        ],
+        "locked": false,
+        "forced": false,
+        "winner": null,
+        "winScore": null
+      }
+    ],
+    "resting": [],
+    "confirmed": false
+  },
+  "forced": {
+    "pairs": [],
+    "match": null
+  },
+  "settings": {
+    "courts": 2,
+    "total": 21,
+    "earlyRounds": 4,
+    "partnerStrict": 4,
+    "oppStrict": 3,
+    "balance": 3,
+    "restFair": 4,
+    "initialSkillLater": true,
+    "rankBy": "points",
+    "allowOverride": false,
+    "noise": 3
+  }
+}

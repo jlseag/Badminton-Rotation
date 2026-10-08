@@ -37,6 +37,8 @@ JSON backup, and **Import session** to move a session to another device.
    `21 − winning score` (the total is configurable).
 7. **Finish Round** — points, games played, rests, partner and opponent history all update,
    and the next round is suggested automatically.
+8. **End game** — stop whenever you like and get the final score: champion, podium and the full
+   table. Nothing is lost; **Keep playing** picks the session back up exactly where it was.
 
 ## What the algorithm does
 
