@@ -201,6 +201,21 @@ tr.top3{background:linear-gradient(90deg,#FBF0E4,transparent)}
 tr.rest td:nth-child(2)::after{content:"RESTING";font-size:9px;font-weight:900;color:#7A5A00;
   background:#FFF0C9;padding:3px 6px;border-radius:999px;margin-left:7px;letter-spacing:.5px}
 .few{color:var(--court)!important}
+.card.board{padding:4px 8px}
+.board table{font-size:13px}
+.board th{padding:9px 3px;font-size:9.5px;letter-spacing:.3px}
+.board td{padding:11px 3px}
+.board td:nth-child(2){font-size:14px}
+.board .rk{width:26px}
+.hl{display:grid;grid-template-columns:1fr 1fr;gap:11px}
+.hl>div{background:var(--card);border:2px solid var(--line);border-bottom-width:4px;border-bottom-color:var(--line2);
+  border-radius:var(--r-sm);padding:13px 12px;box-shadow:var(--shadow)}
+.hl>div.low{border-bottom-color:#EFC9C9}
+.hl .lab{font-size:10px;font-weight:900;letter-spacing:.4px;text-transform:uppercase;color:var(--ink3)}
+.hl .nm{font-family:Fredoka,sans-serif;font-size:19px;font-weight:600;margin-top:6px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hl .val{font-size:13px;font-weight:800;color:var(--court);margin-top:2px}
+.hl>div.low .val{color:var(--red)}
 
 /* ---------- history / matrix / stats ---------- */
 .hist{background:var(--card);border:2px solid var(--line);border-radius:var(--r);padding:14px;
@@ -593,11 +608,10 @@ const ICONS={
   board:'<path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M21 20H3"/>',
   players:'<circle cx="9" cy="8" r="3.2"/><path d="M3 20a6 6 0 0112 0"/><path d="M16 5.5a3 3 0 010 5.5"/><path d="M18.5 20a5.5 5.5 0 00-2.5-4.6"/>',
   history:'<circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3.2 2"/>',
-  stats:'<path d="M20 6L13 14l-4-3.5L4 17"/><path d="M15 6h5v5"/>',
   set:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 00.3 1.8l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.6 1.6 0 00-2.7 1.1V21a2 2 0 11-4 0v-.1A1.6 1.6 0 006.6 19.5l-.1.1a2 2 0 11-2.8-2.8l.1-.1A1.6 1.6 0 003 15a2 2 0 010-4 1.6 1.6 0 001.1-2.7l-.1-.1a2 2 0 112.8-2.8l.1.1A1.6 1.6 0 009 4.6V4a2 2 0 114 0v.1a1.6 1.6 0 002.7 1.1l.1-.1a2 2 0 112.8 2.8l-.1.1A1.6 1.6 0 0021 11a2 2 0 010 4z"/>'
 };
 const TABS=[['game','Game','game'],['board','Leaderboard','board'],['players','Players','players'],
-            ['history','History','history'],['stats','Stats','stats'],['settings','Settings','set']];
+            ['history','History','history'],['settings','Settings','set']];
 
 function toast(msg,bad){
   const d=document.createElement('div');
@@ -647,7 +661,6 @@ function render(){
     : tab==='board' ? viewBoard(st)
     : tab==='players' ? viewPlayers(st)
     : tab==='history' ? viewHistory(st)
-    : tab==='stats' ? viewStats(st)
     : viewSettings();
   wire();
   save();
@@ -920,24 +933,53 @@ function ranked(st){
 }
 function viewBoard(st){
   const list=ranked(st);
-  if(!roundsDone())return `<div class="card"><div class="empty"><span class="ic">🏆</span><b>No results yet</b>Finish round 1 to see the leaderboard</div></div>`;
+  if(!roundsDone())return `<div class="card"><div class="empty"><span class="ic">\u{1F3C6}</span><b>No results yet</b>
+    Finish round 1 and the table fills in</div></div>`;
   const avgG=S.players.reduce((a,p)=>a+st[p.id].games,0)/S.players.length;
   const resting=new Set(S.current?S.current.resting:[]);
   const label={points:'Total Points',avg:'Avg / Game',wins:'Wins',winpct:'Win %'}[S.settings.rankBy];
+  const pct=s=>Math.round(s.wr*100)+'%';
+  const medal=['\u{1F947}','\u{1F948}','\u{1F949}'];
   return `
   <div class="card tight"><div class="row"><span class="mini">Ranked by ${label}</span><span class="sp"></span>
     <span class="mini">avg ${avgG.toFixed(1)} games</span></div></div>
-  <div class="card" style="padding:4px 10px">
-  <table><thead><tr><th class="rk">#</th><th>Player</th><th>Pts</th><th>G</th><th>Avg</th><th>W–L</th></tr></thead><tbody>
+  <div class="card board">
+  <table><thead><tr><th class="rk">#</th><th>Player</th><th>Pts</th><th>G</th><th>Avg</th><th>W</th><th>L</th><th>Win%</th></tr></thead><tbody>
   ${list.map((s,i)=>`<tr class="${i<3?'top'+(i+1):''} ${resting.has(s.id)?'rest':''}">
-    <td class="rk">${i<3?['🥇','🥈','🥉'][i]:i+1}</td>
+    <td class="rk">${i<3?medal[i]:i+1}</td>
     <td>${esc(nameOf(s.id))}</td>
-    <td style="font-weight:800">${s.pts}</td>
+    <td style="font-weight:900">${s.pts}</td>
     <td class="${s.games<avgG-0.5?'few':''}">${s.games}</td>
-    <td>${s.games?s.avg.toFixed(1):'–'}</td>
-    <td class="muted" style="font-size:12px">${s.wins}–${s.losses}</td></tr>`).join('')}
+    <td>${s.games?s.avg.toFixed(1):'\u2013'}</td>
+    <td>${s.wins}</td><td>${s.losses}</td>
+    <td>${s.games?pct(s):'\u2013'}</td></tr>`).join('')}
   </tbody></table></div>
-  <div class="muted" style="padding:0 4px">🥇🥈🥉 top three · <span style="color:var(--blue)">blue</span> = fewer games than the session average</div>`;
+  <div class="muted" style="padding:0 4px 4px">${medal.join('')} top three \u00b7
+    <span style="color:var(--court)">green</span> = fewer games than the session average</div>
+  ${highlights(st)}`;
+}
+
+function highlights(st){
+  const played=S.players.map(p=>st[p.id]).filter(s=>s.games>0);
+  if(played.length<2)return '';
+  const top=f=>played.slice().sort((a,b)=>f(b)-f(a)||b.pts-a.pts)[0];
+  const bot=f=>played.slice().sort((a,b)=>f(a)-f(b)||a.pts-b.pts)[0];
+  const pct=s=>Math.round(s.wr*100)+'%';
+  const wl=s=>s.wins+'\u2013'+s.losses;
+  const card=(lab,s,val,low)=>`<div class="${low?'low':''}">
+    <div class="lab">${lab}</div><div class="nm">${esc(nameOf(s.id))}</div><div class="val">${val}</div></div>`;
+  const hp=top(s=>s.pts), hw=top(s=>s.wr), mw=top(s=>s.wins);
+  const lp=bot(s=>s.pts), lw=bot(s=>s.wins), lwp=bot(s=>s.wr);
+  return `
+  <div class="sec-h">Session highlights</div>
+  <div class="hl">
+    ${card('\u{1F3F8} Highest points',hp,hp.pts+' pts')}
+    ${card('\u{1F525} Best win rate',hw,pct(hw)+' \u00b7 '+wl(hw))}
+    ${card('\u{1F3C6} Most wins',mw,mw.wins+(mw.wins===1?' win':' wins'))}
+    ${card('\u{1F4C9} Lowest points',lp,lp.pts+' pts',1)}
+    ${card('\u{1F944} Fewest wins',lw,lw.wins+(lw.wins===1?' win':' wins'),1)}
+    ${card('\u2601\uFE0F Lowest win rate',lwp,pct(lwp)+' \u00b7 '+wl(lwp),1)}
+  </div>`;
 }
 
 /* ---------------- players ------------------------------------------------ */
@@ -1033,57 +1075,6 @@ function undoLast(){
   if(!S.rounds.length)return;
   ask('The points, games played and history from that round will be reversed.','Undo round '+S.rounds[S.rounds.length-1].n,
     ()=>{S.rounds.pop();S.current=null;sel=null;render();toast('Last round removed')});
-}
-
-/* ---------------- stats -------------------------------------------------- */
-function viewStats(st){
-  if(!roundsDone())return `<div class="card"><div class="empty"><span class="ic">📊</span><b>No data yet</b>Session stats appear after the first round</div></div>`;
-  const list=ranked(st), played=S.players.filter(p=>st[p.id].games>0);
-  const best=(arr,f)=>arr.slice().sort((a,b)=>f(b)-f(a))[0];
-  let closest=null,biggest=null,partnerCount={},margins=[];
-  S.rounds.forEach(r=>r.courts.forEach(c=>{
-    if(!c.winner||c.winScore==null)return;
-    const m=c.winScore-(S.settings.total-c.winScore);
-    const rec={m,r:r.n,w:c.winner==='a'?c.a:c.b,l:c.winner==='a'?c.b:c.a,ws:c.winScore};
-    margins.push(rec);
-    [c.a,c.b].forEach(t=>{const k=pk(t[0],t[1]);partnerCount[k]=(partnerCount[k]||0)+1});
-  }));
-  margins.sort((a,b)=>a.m-b.m);closest=margins[0];biggest=margins[margins.length-1];
-  const topPair=Object.entries(partnerCount).sort((a,b)=>b[1]-a[1])[0];
-  const mostPartners=best(S.players,p=>Object.keys(st[p.id].partners).length);
-  const hiPts=best(played,p=>st[p.id].pts), hiAvg=best(played,p=>st[p.id].avg), mostW=best(played,p=>st[p.id].wins);
-  const gs=S.players.map(p=>st[p.id].games);
-  const row=(k,v,s)=>`<div class="stat"><span class="k">${k}</span><span class="v">${v}${s?`<small>${s}</small>`:''}</span></div>`;
-  return `
-  <div class="sec-h">Final leaderboard</div>
-  <div class="card" style="padding:4px 10px">
-  <table><thead><tr><th class="rk">#</th><th>Player</th><th>Pts</th><th>G</th><th>Avg</th><th>W</th><th>L</th><th>Win%</th></tr></thead><tbody>
-  ${list.map((s,i)=>`<tr class="${i<3?'top'+(i+1):''}"><td class="rk">${i+1}</td><td>${esc(nameOf(s.id))}</td>
-    <td style="font-weight:800">${s.pts}</td><td>${s.games}</td><td>${s.games?s.avg.toFixed(1):'–'}</td>
-    <td>${s.wins}</td><td>${s.losses}</td><td>${s.games?Math.round(s.wr*100)+'%':'–'}</td></tr>`).join('')}
-  </tbody></table></div>
-  <div class="sec-h">Session highlights</div>
-  <div class="card">
-    ${hiPts?row('Highest total points',esc(hiPts.name),st[hiPts.id].pts+' pts'):''}
-    ${hiAvg?row('Best average per game',esc(hiAvg.name),st[hiAvg.id].avg.toFixed(1)+' pts/game'):''}
-    ${mostW?row('Most wins',esc(mostW.name),st[mostW.id].wins+' wins'):''}
-    ${closest?row('Closest game',`${closest.ws}–${S.settings.total-closest.ws}`,`R${closest.r} · ${esc(teamName(closest.w))}`):''}
-    ${biggest?row('Biggest margin',`${biggest.ws}–${S.settings.total-biggest.ws}`,`R${biggest.r} · ${esc(teamName(biggest.w))}`):''}
-    ${mostPartners?row('Most different partners',esc(mostPartners.name),Object.keys(st[mostPartners.id].partners).length+' partners'):''}
-    ${topPair?row('Most common partnership',topPair[0].split('|').map(nameOf).map(esc).join(' + '),topPair[1]+'×'):''}
-  </div>
-  <div class="sec-h">Fairness</div>
-  <div class="card">
-    ${row('Rounds played','',roundsDone()+' rounds')}
-    ${row('Games played spread',`${Math.min(...gs)} – ${Math.max(...gs)}`,`gap of ${Math.max(...gs)-Math.min(...gs)}`)}
-    ${row('Total points awarded','',S.players.reduce((a,p)=>a+st[p.id].pts,0)+' pts')}
-    ${row('Repeat partnerships','',Object.values(partnerCount).filter(v=>v>1).length+' pairs played together more than once')}
-  </div>
-  <div class="sec-h">Rest history</div>
-  <div class="card">
-    ${S.rounds.map(r=>`<div class="hrow"><span class="mini" style="width:70px">Round ${r.n}</span>
-      <span>${r.resting.length?r.resting.map(id=>esc(nameOf(id))).join(', '):'<span class="muted">nobody rested</span>'}</span></div>`).join('')}
-  </div>`;
 }
 
 /* ---------------- settings ----------------------------------------------- */

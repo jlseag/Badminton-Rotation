@@ -72,6 +72,15 @@ skill order. After that the leaderboard drives the matchmaking: strong players g
 weaker ones so team totals are even, and the evenly-matched teams are put against each other,
 which naturally makes the top players face one another.
 
+## Screens
+
+**Game** · **Leaderboard** · **Players** · **History** · **Settings**
+
+The Leaderboard is the full record: points, games, average, wins, losses and win %, followed by
+session highlights — highest and lowest points, best and worst win rate, most and fewest wins.
+(There is no separate Stats tab; end-of-session extras like the closest game live on the
+End game screen.)
+
 ## Notes
 
 - Every screen shows all players, including whoever is resting. Resting players never receive points.
