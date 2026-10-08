@@ -31,7 +31,12 @@ JSON backup, and **Import session** to move a session to another device.
    courts as the people present can fill (4 each) and rests the remainder, so 6 players on
    2 courts simply plays 1 court with 2 resting. It adapts every round as people arrive or leave.
 4. **Adjust if you want** — tap any two players to swap them (including a resting player),
-   lock a pair or a whole court, or add a Custom Pairing. Nothing is recorded while you edit.
+   or add a Custom Pairing. Nothing is recorded while you edit.
+   - **Lock pair** makes two players permanent partners. They are put on the same team every
+     round until you unlock them, they sit out together rather than being split up, and neither
+     can be swapped away. Unlock from the pair itself or the Locked partners list.
+   - **The court padlock** is separate and only lasts the round — it keeps that court intact
+     when you press Regenerate.
 5. **Confirm Round** — teams become official.
 6. **Enter results** — tap the winning team, tap the winning score. The losing score is
    `21 − winning score` (the total is configurable).

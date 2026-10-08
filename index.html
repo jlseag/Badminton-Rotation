@@ -150,6 +150,8 @@ nav button.on{color:var(--court);background:rgba(14,138,79,.11)}
 .team{border:2px solid var(--line);border-bottom-width:3px;border-radius:var(--r-sm);padding:12px;
   background:var(--white);display:block;width:100%;text-align:left}
 .team.win{border-color:var(--court);background:#EAF7EF;box-shadow:0 0 0 3px rgba(14,138,79,.15)}
+.team.lockedpair{border-color:var(--court);background:#F3FBF5}
+.btn.xs.lockon{background:var(--court);color:#fff;border-color:var(--court-d);border-bottom-color:var(--court-x)}
 .team.lose{opacity:.5}
 .tnames{display:flex;flex-direction:column;gap:7px}
 .chip{display:flex;align-items:center;gap:8px;background:var(--ground);border:2px solid transparent;
@@ -290,6 +292,7 @@ function defState(){return{
   rounds:[],                  // finished: {n,courts:[{a:[id,id],b:[id,id],winner:'a'|'b',winScore}],resting:[id]}
   current:null,               // draft/active round (same shape + confirmed)
   forced:{pairs:[],match:null},
+  locks:[],                   // [[idA,idB],...] — locked partners, kept every round until unlocked
   settings:{
     courts:2, total:21, earlyRounds:4,
     partnerStrict:4, oppStrict:3, balance:3, restFair:4,
@@ -303,13 +306,23 @@ function load(){
   try{const r=localStorage.getItem(LS); if(!r)return;
     const o=JSON.parse(r); if(o&&o.v===1){S=Object.assign(defState(),o);
       S.settings=Object.assign(defState().settings,o.settings||{});
-      S.forced=Object.assign({pairs:[],match:null},o.forced||{});}
+      S.forced=Object.assign({pairs:[],match:null},o.forced||{});
+      S.locks=Array.isArray(o.locks)?o.locks.filter(x=>Array.isArray(x)&&x.length===2):[];}
   }catch(e){}
 }
 const P=id=>S.players.find(p=>p.id===id);
 const nameOf=id=>{const p=P(id);return p?p.name:'?'};
 const teamName=t=>t.map(nameOf).join(' + ');
 const pk=(a,b)=>a<b?a+'|'+b:b+'|'+a;
+/* locked partners — a standing rule, not a per-round flag */
+const isLockedPair=(a,b)=>S.locks.some(l=>pk(l[0],l[1])===pk(a,b));
+const lockedMate=id=>{const l=S.locks.find(l=>l[0]===id||l[1]===id);return l?(l[0]===id?l[1]:l[0]):null};
+const isLocked=id=>!!lockedMate(id);
+function setLock(a,b,on){
+  S.locks=S.locks.filter(l=>!l.includes(a)&&!l.includes(b));
+  if(on)S.locks.push([a,b]);
+}
+function pruneLocks(){S.locks=S.locks.filter(l=>l.every(id=>P(id)))}
 
 /* ---------------- derived stats (single source of truth = rounds) -------- */
 function stats(){
@@ -378,19 +391,35 @@ function strengths(st){
 /* ---------------- resting selection -------------------------------------- */
 function pickResting(need,st,forcedIn){
   if(need<=0)return[];
-  const rd=roundsDone();
-  const cand=S.players.filter(p=>!forcedIn.has(p.id));
-  const fair=S.settings.restFair/3;
-  const scored=cand.map(p=>{
-    const s=st[p.id];
+  const rd=roundsDone(), fair=S.settings.restFair/3;
+  const score=id=>{
+    const s=st[id];
     const sinceRest=s.lastRest==null?rd+2:rd-s.lastRest;
-    return{id:p.id,
-      k: s.games*10*fair            // played the most -> rest first
-       - s.rests*9*fair             // already rested -> rest later (no 2nd rest before 1st)
-       + Math.min(sinceRest,6)*.6
-       + Math.random()*.9};
-  }).sort((a,b)=>b.k-a.k);
-  return scored.slice(0,need).map(x=>x.id);
+    return s.games*10*fair          // played the most -> rest first
+         - s.rests*9*fair           // already rested -> rest later (no 2nd rest before 1st)
+         + Math.min(sinceRest,6)*.6
+         + Math.random()*.9;
+  };
+  // locked partners sit out together, so the lock never gets broken by a rest
+  const seen=new Set(), units=[];
+  S.players.forEach(p=>{
+    if(forcedIn.has(p.id)||seen.has(p.id))return;
+    const mate=lockedMate(p.id);
+    if(mate&&P(mate)&&!forcedIn.has(mate)&&!seen.has(mate)){
+      units.push({ids:[p.id,mate],k:(score(p.id)+score(mate))/2});
+      seen.add(p.id);seen.add(mate);
+    }else{units.push({ids:[p.id],k:score(p.id)});seen.add(p.id)}
+  });
+  units.sort((a,b)=>b.k-a.k);
+  const out=[];
+  for(const u of units){                       // skip a pair that would overshoot the quota
+    if(out.length>=need)break;
+    if(out.length+u.ids.length<=need)out.push(...u.ids);
+  }
+  if(out.length<need)                          // safety net: only reachable if every unit is a pair
+    for(const u of units)for(const id of u.ids)
+      if(out.length<need&&out.indexOf(id)<0)out.push(id);
+  return out.slice(0,need);
 }
 
 /* ---------------- matchmaking engine ------------------------------------- */
@@ -429,10 +458,6 @@ function generateRound(keepLocks){
       const ids=[...c.a,...c.b];
       if(c.locked&&ids.every(id=>P(id))&&!ids.some(i=>used.has(i))&&fixed.length<courts){
         fixed.push({a:[...c.a],b:[...c.b],locked:true});take(ids);
-      }else{
-        [c.a,c.b].forEach((t,i)=>{
-          if(c['lock'+(i?'B':'A')]&&t.every(id=>P(id))&&!t.some(x=>used.has(x))){pairUnits.push({ids:[...t],lock:true});take(t)}
-        });
       }
     });
   }
@@ -446,14 +471,22 @@ function generateRound(keepLocks){
   const drop=[];
   while(pairUnits.length>slotsFree){const u=pairUnits.pop();drop.push(u);u.ids.forEach(i=>used.delete(i))}
 
-  // who must play (everyone locked / forced in), then choose resters from the rest
+  // who is already committed to play, then choose resters (locked partners rest together)
   const mustPlay=new Set(used);
   const resting=pickResting(S.players.length-need,st,mustPlay);
   const restSet=new Set(resting);
-  const singles=S.players.map(p=>p.id).filter(id=>!used.has(id)&&!restSet.has(id));
 
+  // every locked pair that is playing this round is a team, automatically
+  S.locks.forEach(pr=>{
+    if(pr.length!==2||!pr.every(id=>P(id)))return;
+    if(pr.some(i=>used.has(i))||pr.some(i=>restSet.has(i)))return;
+    if(pairUnits.length>=slotsFree){drop.push({ids:pr});return}
+    pairUnits.push({ids:[...pr],lock:true});take(pr);
+  });
+
+  const singles=S.players.map(p=>p.id).filter(id=>!used.has(id)&&!restSet.has(id));
   const singlesNeeded=openCourts*4-pairUnits.length*2;
-  if(singles.length!==singlesNeeded)return{error:'Could not fit the forced pairings into the available courts.'};
+  if(singles.length!==singlesNeeded)return{error:'Could not fit the locked or forced pairings into the available courts.'};
 
   // stable per-pair jitter => social variety without confusing the optimiser
   const jit={};
@@ -698,15 +731,16 @@ function viewGame(st){
       <span>${esc(nameOf(id))}</span><span class="st">${s.pts} pts · ${s.games}g</span></button>`;
   };
   const teamBlock=(c,side,ci)=>{
-    const t=c[side], loc=c.locked||c['lock'+side.toUpperCase()];
+    const t=c[side], lk=isLockedPair(t[0],t[1]), loc=c.locked||lk;
     if(draft){
       const pc=(st[t[0]].partners[t[1]]||0), lp=st[t[0]].lastPartner[t[1]];
-      const hint=pc?`<span class="mini" style="color:var(--warn)">Partnered ${pc}× before${lp!=null?' (last R'+lp+')':''}</span>`
+      const hint=lk?'<span class="mini" style="color:var(--court)">🔒 Always partners</span>'
+                 :pc?`<span class="mini" style="color:#7A5A00">Partnered ${pc}× before${lp!=null?' (last R'+lp+')':''}</span>`
                    :'<span class="mini">New partnership</span>';
-      return `<div class="team">${loc?'<div class="mini" style="color:var(--blue);margin-bottom:6px">🔒 Locked pair</div>':''}
-        <div class="tnames">${t.map(id=>chip(id,c.locked||loc)).join('')}</div>
-        <div class="row" style="margin-top:8px">${hint}<span class="sp"></span>
-        <button class="btn xs" onclick="toggleTeamLock(${ci},'${side}')">${loc?'Unlock':'Lock pair'}</button></div></div>`;
+      return `<div class="team ${lk?'lockedpair':''}">
+        <div class="tnames">${t.map(id=>chip(id,loc)).join('')}</div>
+        <div class="row" style="margin-top:9px">${hint}<span class="sp"></span>
+        <button class="btn xs ${lk?'lockon':''}" onclick="toggleTeamLock(${ci},'${side}')">${lk?'🔒 Unlock':'Lock pair'}</button></div></div>`;
     }
     const w=c.winner===side, l=c.winner&&c.winner!==side;
     return `<button class="team ${w?'win':''} ${l?'lose':''}" onclick="pickWinner(${ci},'${side}')">
@@ -845,6 +879,13 @@ function forcedUI(){
   const used=new Set();f.pairs.forEach(p=>p.forEach(i=>used.add(i)));
   if(f.match)[...f.match.a,...f.match.b].forEach(i=>used.add(i));
   return `
+  ${S.locks.length?`<div class="sec-h">Locked partners</div>
+  <div class="card">
+    ${S.locks.map((l,i)=>`<div class="row" style="margin-bottom:9px">
+      <span class="pill" style="flex:1;border-color:var(--court);color:var(--court-d)">🔒 ${esc(nameOf(l[0]))} + ${esc(nameOf(l[1]))}</span>
+      <button class="ibtn dan" onclick="unlockPair(${i})">×</button></div>`).join('')}
+    <div class="muted">These two stay on the same team every round — and sit out together — until you unlock them.</div>
+  </div>`:''}
   <div class="sec-h">Custom pairings</div>
   <div class="card">
     ${f.pairs.length?f.pairs.map((p,i)=>`<div class="row" style="margin-bottom:8px">
@@ -1121,6 +1162,7 @@ function delPlayer(id){
 }
 function dropPlayer(id){
   S.players=S.players.filter(p=>p.id!==id);
+  S.locks=S.locks.filter(l=>!l.includes(id));
   S.forced.pairs=S.forced.pairs.filter(pr=>!pr.includes(id));
   if(S.forced.match&&[...S.forced.match.a,...S.forced.match.b].includes(id))S.forced.match=null;
   if(S.current&&(S.current.resting.includes(id)||S.current.courts.some(c=>[...c.a,...c.b].includes(id))))S.current=null;
@@ -1142,12 +1184,12 @@ function setSetting(k,v){
 }
 function startSession(){
   if(!S.players.length)return;
-  S.started=true;S.ended=false;S.rounds=[];S.current=null;S.forced={pairs:[],match:null};tab='game';
+  S.started=true;S.ended=false;S.rounds=[];S.current=null;S.forced={pairs:[],match:null};S.locks=[];tab='game';
   render();toast('Session started — good luck!');
 }
 function newSession(){
   ask('Players and their skill order are kept — all results are cleared.','Start a new session',()=>{
-    S.rounds=[];S.current=null;S.forced={pairs:[],match:null};S.started=false;S.ended=false;tab='game';render()});
+    S.rounds=[];S.current=null;S.forced={pairs:[],match:null};S.locks=[];S.started=false;S.ended=false;tab='game';render()});
 }
 function hardReset(){
   ask('Players, rounds and settings will all be erased from this device.','Reset everything',()=>{
@@ -1170,9 +1212,12 @@ function locate(id){
   return null;
 }
 function frozen(loc){
-  if(!loc||loc.type==='rest')return false;
+  if(!loc)return false;
+  if(loc.type==='rest')return false;
   const c=S.current.courts[loc.i];
-  return !!(c.locked||c['lock'+loc.side.toUpperCase()]);
+  if(c.locked)return true;
+  const t=c[loc.side];
+  return isLockedPair(t[0],t[1]);        // locked partners stay put until unlocked
 }
 function tapPlayer(id){
   if(!S.current||S.current.confirmed)return;
@@ -1187,8 +1232,15 @@ function swapPlayers(x,y){
   const put=(loc,id)=>{ if(loc.type==='rest')S.current.resting[loc.i]=id; else S.current.courts[loc.i][loc.side][loc.k]=id };
   put(A,y);put(B,x);
 }
-function toggleCourtLock(i){const c=S.current.courts[i];c.locked=!c.locked;if(c.locked){c.lockA=false;c.lockB=false}render()}
-function toggleTeamLock(i,side){const c=S.current.courts[i],k='lock'+side.toUpperCase();c[k]=!c[k];render()}
+function toggleCourtLock(i){const c=S.current.courts[i];c.locked=!c.locked;render()}
+function toggleTeamLock(i,side){
+  const t=S.current.courts[i][side];
+  const on=!isLockedPair(t[0],t[1]);
+  setLock(t[0],t[1],on);
+  sel=null;render();
+  toast(on?`${nameOf(t[0])} + ${nameOf(t[1])} are locked together`:'Pair unlocked');
+}
+function unlockPair(i){const l=S.locks[i];if(!l)return;S.locks.splice(i,1);render();toast('Pair unlocked')}
 function regen(){
   sel=null;
   const r=generateRound(true);
@@ -1303,6 +1355,7 @@ function importData(input){
       S=Object.assign(defState(),o);
       S.settings=Object.assign(defState().settings,o.settings||{});
       S.forced=Object.assign({pairs:[],match:null},o.forced||{});
+      S.locks=Array.isArray(o.locks)?o.locks:[];
       tab='game';render();toast('Session imported');
     }catch(e){toast('That file is not a valid session',1)}
   };
