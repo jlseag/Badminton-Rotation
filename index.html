@@ -245,6 +245,12 @@ tr.rest td:nth-child(2)::after{content:"RESTING";font-size:9px;font-weight:900;c
 .seg{display:flex;background:var(--ground);border:2px solid var(--line);border-radius:13px;padding:3px;gap:3px}
 .seg button{flex:1;min-height:40px;border-radius:10px;font-size:12.5px;font-weight:800;color:var(--ink2)}
 .seg button.on{background:var(--court);color:#fff}
+.presets{display:flex;gap:8px;align-items:center}
+.presets button{flex:1;min-height:46px;border-radius:12px;background:var(--white);border:2px solid var(--line);
+  border-bottom-width:4px;border-bottom-color:var(--line2);font-family:Fredoka,sans-serif;font-weight:600;font-size:16px}
+.presets button.on{background:var(--court);color:#fff;border-color:var(--court-d);border-bottom-color:var(--court-x)}
+.scorepick.wide{grid-template-columns:repeat(6,1fr)}
+.scorepick.wide button{min-height:46px;font-size:15px}
 
 /* ---------- final results ---------- */
 .champ{background:linear-gradient(135deg,var(--court-l),var(--court-d));color:#fff;border-radius:var(--r);
@@ -309,7 +315,7 @@ function defState(){return{
   forced:{pairs:[],match:null},
   locks:[],                   // [[idA,idB],...] — locked partners, kept every round until unlocked
   settings:{
-    courts:2, total:21, earlyRounds:4,
+    courts:2, mode:'combined', total:21, earlyRounds:4,
     partnerStrict:4, oppStrict:3, balance:3, restFair:4,
     initialSkillLater:true, rankBy:'points', allowOverride:false, noise:3
   }
@@ -322,13 +328,33 @@ function load(){
     const o=JSON.parse(r); if(o&&o.v===1){S=Object.assign(defState(),o);
       S.settings=Object.assign(defState().settings,o.settings||{});
       S.forced=Object.assign({pairs:[],match:null},o.forced||{});
-      S.locks=Array.isArray(o.locks)?o.locks.filter(x=>Array.isArray(x)&&x.length===2):[];}
+      S.locks=Array.isArray(o.locks)?o.locks.filter(x=>Array.isArray(x)&&x.length===2):[];
+      // sessions saved before scoring modes existed only stored the winner's score
+      const T=S.settings.total;
+      (S.rounds||[]).forEach(r=>(r.courts||[]).forEach(c=>{
+        if(c.loseScore==null&&c.winScore!=null)c.loseScore=T-c.winScore;}));}
   }catch(e){}
 }
 const P=id=>S.players.find(p=>p.id===id);
 const nameOf=id=>{const p=P(id);return p?p.name:'?'};
 const teamName=t=>t.map(nameOf).join(' + ');
 const pk=(a,b)=>a<b?a+'|'+b:b+'|'+a;
+/* scoring modes -------------------------------------------------------------
+   combined : both scores add up to settings.total — you enter the WINNER's score
+   firstto  : winner reaches settings.total        — you enter the LOSER's score   */
+const isFirstTo=()=>S.settings.mode==='firstto';
+const modeName=()=>isFirstTo()?`First to ${S.settings.total}`:`Combined ${S.settings.total}`;
+const lossOf=c=>c.loseScore!=null?c.loseScore:(c.winScore==null?null:S.settings.total-c.winScore);
+const hasScore=c=>c.winScore!=null&&lossOf(c)!=null;
+function applyScore(c,v){            // v is whichever number that mode asks for
+  if(isFirstTo()){c.winScore=S.settings.total;c.loseScore=v}
+  else{c.winScore=v;c.loseScore=S.settings.total-v}
+}
+function scoreRange(){               // [min,max] of the number the user picks
+  return isFirstTo()?[0,S.settings.total-1]
+                    :[Math.floor(S.settings.total/2)+1,S.settings.total-1];
+}
+const pickedValue=c=>isFirstTo()?lossOf(c):c.winScore;
 /* locked partners — a standing rule, not a per-round flag */
 const isLockedPair=(a,b)=>S.locks.some(l=>pk(l[0],l[1])===pk(a,b));
 const lockedMate=id=>{const l=S.locks.find(l=>l[0]===id||l[1]===id);return l?(l[0]===id?l[1]:l[0]):null};
@@ -358,8 +384,8 @@ function stats(){
         t.forEach(x=>o.forEach(y=>{if(m[x]&&m[y]){m[x].opps[y]=(m[x].opps[y]||0)+1;m[x].lastOpp[y]=rd.n}}));
       });
       if(!full)return;
-      if(c.winner&&c.winScore!=null){
-        const ws=c.winScore, ls=S.settings.total-ws;
+      if(c.winner&&hasScore(c)){
+        const ws=c.winScore, ls=lossOf(c);
         const w=c.winner==='a'?c.a:c.b, l=c.winner==='a'?c.b:c.a;
         w.forEach(id=>{const s=m[id];if(!s)return;s.pts+=ws;s.games++;s.wins++;s.scores.push(ws);s.lastPlayed=rd.n});
         l.forEach(id=>{const s=m[id];if(!s)return;s.pts+=ls;s.games++;s.losses++;s.scores.push(ls);s.lastPlayed=rd.n});
@@ -388,8 +414,9 @@ function strengths(st){
     if(!s||!s.games){out[p.id]=init;return}
     const recent=s.scores.slice(-4), rAvg=recent.reduce((a,b)=>a+b,0)/recent.length;
     const blend=.65*s.avg+.35*rAvg;                             // points/game, recency-weighted
-    const half=S.settings.total/2;
-    const perf=clamp((blend-half)/(half*.45)*50+50,0,100);       // half of total == average == 50
+    // a typical score: half the combined total, or roughly 60% of the target in first-to
+    const par=isFirstTo()?S.settings.total*.6:S.settings.total/2;
+    const perf=clamp((blend-par)/(par*.45)*50+50,0,100);          // par == average == 50
     const w=clamp(Math.max(phaseW,1-s.games/4),0,1);             // few games => trust initial rank more
     out[p.id]=w*init+(1-w)*perf;
   });
@@ -593,7 +620,7 @@ function generateRound(keepLocks){
     if(curP<bestP){bestP=curP;best=cur}
   }
   const cs=toCourts(best||[]);
-  cs.forEach(c=>{c.winner=null;c.winScore=null});
+  cs.forEach(c=>{c.winner=null;c.winScore=null;c.loseScore=null});
   return{round:{n:roundsDone()+1,courts:cs,resting,confirmed:false},dropped:drop.length};
 }
 
@@ -734,8 +761,7 @@ function viewGame(st){
     S.current=r.round;
   }
   const cur=S.current, str=strengths(st), draft=!cur.confirmed;
-  const min=Math.floor(S.settings.total/2)+1, max=S.settings.total-1;
-  const allDone=cur.courts.every(c=>c.winner&&c.winScore!=null);
+  const allDone=cur.courts.every(c=>c.winner&&hasScore(c));
 
   const chip=(id,loc)=>{
     const s=st[id]||{pts:0,games:0};
@@ -792,7 +818,7 @@ function viewGame(st){
         <div class="vs"><span>VS</span></div>
         ${teamBlock(c,'b',i)}
         ${b<70&&draft?'<div class="note" style="margin:10px 0 0">⚠️ This matchup may be uneven — you can still proceed.</div>':''}
-        ${!draft?scoreUI(c,i,min,max):''}
+        ${!draft?scoreUI(c,i):''}
       </div>
     </div>`}).join('')}
 
@@ -831,8 +857,8 @@ function viewFinal(st){
   const gs=S.players.map(p=>st[p.id].games);
   let margins=[],pc={};
   S.rounds.forEach(r=>r.courts.forEach(c=>{
-    if(!c.winner||c.winScore==null)return;
-    margins.push({m:2*c.winScore-S.settings.total,r:r.n,ws:c.winScore,
+    if(!c.winner||!hasScore(c))return;
+    margins.push({m:c.winScore-lossOf(c),r:r.n,ws:c.winScore,ls:lossOf(c),
       w:c.winner==='a'?c.a:c.b});
     [c.a,c.b].forEach(t=>{const k=pk(t[0],t[1]);pc[k]=(pc[k]||0)+1});
   }));
@@ -857,9 +883,9 @@ function viewFinal(st){
   </tbody></table></div>
   <div class="sec-h">How it went</div>
   <div class="card">
-    ${margins.length?row('Closest game',`${margins[0].ws}–${S.settings.total-margins[0].ws}`,
+    ${margins.length?row('Closest game',`${margins[0].ws}–${margins[0].ls}`,
         `Round ${margins[0].r} · ${esc(teamName(margins[0].w))}`):''}
-    ${margins.length?row('Biggest win',`${margins[margins.length-1].ws}–${S.settings.total-margins[margins.length-1].ws}`,
+    ${margins.length?row('Biggest win',`${margins[margins.length-1].ws}–${margins[margins.length-1].ls}`,
         `Round ${margins[margins.length-1].r} · ${esc(teamName(margins[margins.length-1].w))}`):''}
     ${row('Games played','',`${Math.min(...gs)}–${Math.max(...gs)} each · gap of ${Math.max(...gs)-Math.min(...gs)}`)}
     ${row('Different partnerships','',`${Object.keys(pc).length} pairs, ${Object.values(pc).filter(v=>v>1).length} repeated`)}
@@ -871,16 +897,21 @@ function viewFinal(st){
   </div>`;
 }
 
-function scoreUI(c,i,min,max){
+function scoreUI(c,i){
   if(!c.winner)return '';
-  const ws=c.winScore, ls=ws==null?null:S.settings.total-ws;
+  const ft=isFirstTo();
+  const [min,max]=scoreRange();
+  const picked=pickedValue(c), ws=c.winScore, ls=lossOf(c);
   const opts=[];for(let v=min;v<=max;v++)opts.push(v);
   return `<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
-    <div class="mini">Winning score (total ${S.settings.total})</div>
-    ${ws!=null?`<div class="score"><span class="w">${ws}</span><span class="l">–</span><span>${ls}</span></div>`:''}
-    <div class="scorepick">${opts.map(v=>`<button class="${ws===v?'on':''}" onclick="setScore(${i},${v})">${v}</button>`).join('')}</div>
+    <div class="mini">${ft?`Loser's score \u00b7 first to ${S.settings.total}`
+                         :`Winning score \u00b7 total ${S.settings.total}`}</div>
+    ${ws!=null?`<div class="score"><span class="w">${ws}</span><span class="l">\u2013</span><span>${ls}</span></div>`:''}
+    <div class="scorepick${opts.length>12?' wide':''}">${opts.map(v=>
+      `<button class="${picked===v?'on':''}" onclick="setScore(${i},${v})">${v}</button>`).join('')}</div>
     ${S.settings.allowOverride?`<div class="row" style="margin-top:8px">
-      <input type="number" inputmode="numeric" placeholder="Custom score" id="ovr${i}" value="${ws!=null&&!opts.includes(ws)?ws:''}">
+      <input type="number" inputmode="numeric" placeholder="${ft?"Loser's score":'Winning score'}" id="ovr${i}"
+       value="${picked!=null&&!opts.includes(picked)?picked:''}">
       <button class="btn sm" style="flex:none" onclick="setScore(${i},parseInt(document.getElementById('ovr${i}').value,10))">Set</button></div>`:''}
   </div>`;
 }
@@ -1038,7 +1069,7 @@ function viewHistory(st){
       <div class="row" style="margin-bottom:6px"><b style="font-size:15px">Round ${r.n}</b><span class="sp"></span>
         <button class="btn xs" onclick="editRoundDialog(${r.n})">Edit</button></div>
       ${r.courts.map((c,ci)=>{
-        const ws=c.winScore,ls=S.settings.total-ws;
+        const ws=c.winScore,ls=lossOf(c);
         const w=c.winner==='a'?c.a:c.b,l=c.winner==='a'?c.b:c.a;
         return `<div class="hrow"><span class="mini" style="width:16px">${ci+1}</span>
           <span class="w">${esc(teamName(w))}</span><span class="sc" style="color:var(--acc)">${ws}</span></div>
@@ -1051,7 +1082,7 @@ function viewHistory(st){
 }
 function editRoundDialog(n){
   const r=S.rounds.find(x=>x.n===n);if(!r)return;
-  const min=Math.floor(S.settings.total/2)+1,max=S.settings.total-1;
+  const [min,max]=scoreRange();
   const opts=[];for(let v=min;v<=max;v++)opts.push(v);
   modal(`<h3 style="margin-bottom:4px">Edit Round ${n}</h3>
     <div class="muted" style="margin-bottom:14px">Everything (points, leaderboard, averages) recalculates automatically.</div>
@@ -1062,13 +1093,14 @@ function editRoundDialog(n){
           <button class="${c.winner==='a'?'on':''}" onclick="editSet(${n},${i},'w','a')">${esc(teamName(c.a))}</button>
           <button class="${c.winner==='b'?'on':''}" onclick="editSet(${n},${i},'w','b')">${esc(teamName(c.b))}</button>
         </div>
-        <div class="scorepick">${opts.map(v=>`<button class="${c.winScore===v?'on':''}" onclick="editSet(${n},${i},'s',${v})">${v}</button>`).join('')}</div>
+        <div class="mini" style="margin-bottom:6px">${isFirstTo()?"Loser's score":'Winning score'}</div>
+        <div class="scorepick${opts.length>12?' wide':''}">${opts.map(v=>`<button class="${pickedValue(c)===v?'on':''}" onclick="editSet(${n},${i},'s',${v})">${v}</button>`).join('')}</div>
       </div>`).join('')}
     <button class="btn pri full" onclick="closeModal();render()">Done</button>`);
 }
 function editSet(n,i,what,val){
   const r=S.rounds.find(x=>x.n===n);if(!r)return;
-  if(what==='w')r.courts[i].winner=val;else r.courts[i].winScore=val;
+  if(what==='w')r.courts[i].winner=val;else applyScore(r.courts[i],val);
   save();editRoundDialog(n);
 }
 function undoLast(){
@@ -1088,10 +1120,28 @@ function viewSettings(){
   <div class="card">
     <div class="sl"><span class="lab">Courts available<small>A maximum — rounds only use what your players can fill (4 each)</small></span>
       <input type="number" min="1" max="12" value="${s.courts}" onchange="setSetting('courts',clamp(+this.value||1,1,12))"></div>
-    <div class="sl"><span class="lab">Combined match score<small>Losing score = total − winning score</small></span>
-      <input type="number" min="5" max="99" value="${s.total}" onchange="setSetting('total',clamp(+this.value||21,5,99))"></div>
     <div class="sl"><span class="lab">Warm-up rounds<small>Rounds before competitive mode</small></span>
       <input type="number" min="0" max="20" value="${s.earlyRounds}" onchange="setSetting('earlyRounds',clamp(+this.value||0,0,20))"></div>
+  </div>
+  <div class="sec-h">Scoring</div>
+  <div class="card">
+    <div class="seg" style="margin-bottom:4px">
+      <button class="${s.mode!=='firstto'?'on':''}" onclick="setMode('combined')">Combined score</button>
+      <button class="${s.mode==='firstto'?'on':''}" onclick="setMode('firstto')">First to</button>
+    </div>
+    <div class="muted" style="padding:10px 2px 4px">${s.mode==='firstto'
+      ? `Play until a team reaches <b>${s.total}</b>. You enter the <b>loser's</b> score, so 17 means ${s.total}\u201317.`
+      : `Both scores add up to <b>${s.total}</b>. You enter the <b>winner's</b> score, so ${Math.floor(s.total/2)+3} means ${Math.floor(s.total/2)+3}\u2013${s.total-Math.floor(s.total/2)-3}.`}</div>
+    <div class="mini" style="margin:8px 2px 7px">${s.mode==='firstto'?'Target score':'Combined total'}</div>
+    <div class="presets">
+      ${[15,21,25,30].map(v=>`<button class="${s.total===v?'on':''}" onclick="setSetting('total',${v})">${v}</button>`).join('')}
+    </div>
+    <div class="row" style="margin-top:10px">
+      <span class="mini" style="flex:1">Or set your own</span>
+      <input type="number" min="5" max="99" value="${s.total}" aria-label="Custom score"
+        style="width:96px;flex:none;text-align:center"
+        onchange="setSetting('total',clamp(+this.value||21,5,99))">
+    </div>
   </div>
   <div class="sec-h">Matchmaking weights</div>
   <div class="card">
@@ -1110,7 +1160,7 @@ function viewSettings(){
       <select onchange="setSetting('rankBy',this.value)">
         ${[['points','Total Points'],['avg','Avg Points/Game'],['wins','Wins'],['winpct','Win %']]
           .map(([v,l])=>`<option value="${v}" ${s.rankBy===v?'selected':''}>${l}</option>`).join('')}</select></div>
-    <div class="sl"><span class="lab">Admin score override<small>Allow scores outside ${Math.floor(s.total/2)+1}–${s.total-1}</small></span>
+    <div class="sl"><span class="lab">Admin score override<small>Allow scores outside ${scoreRange()[0]}–${scoreRange()[1]}</small></span>
       <div class="seg" style="width:130px"><button class="${s.allowOverride?'on':''}" onclick="setSetting('allowOverride',true)">On</button>
       <button class="${!s.allowOverride?'on':''}" onclick="setSetting('allowOverride',false)">Off</button></div></div>
   </div>
@@ -1168,6 +1218,14 @@ function reorder(from,to){
   const a=S.players,[m]=a.splice(from,1);a.splice(to,0,m);render();
 }
 function setCourts(d){S.settings.courts=clamp(S.settings.courts+d,1,12);render()}
+function setMode(m){
+  if(S.settings.mode===m)return;
+  S.settings.mode=m;
+  if(S.current&&!S.current.confirmed)S.current=null;
+  render();
+  toast(m==='firstto'?`First to ${S.settings.total} — enter the loser's score`
+                     :`Combined ${S.settings.total} — enter the winner's score`);
+}
 function setSetting(k,v){
   S.settings[k]=v;
   if(k==='courts'&&S.current&&!S.current.confirmed)S.current=null;
@@ -1248,27 +1306,28 @@ function confirmRound(){
 function reopenRound(){
   if(!S.current)return;
   S.current.confirmed=false;
-  S.current.courts.forEach(c=>{c.winner=null;c.winScore=null});
+  S.current.courts.forEach(c=>{c.winner=null;c.winScore=null;c.loseScore=null});
   render();
 }
 function pickWinner(i,side){
   const c=S.current.courts[i];
   c.winner=c.winner===side?null:side;
-  if(!c.winner)c.winScore=null;
+  if(!c.winner){c.winScore=null;c.loseScore=null}
   render();
 }
 function setScore(i,v){
-  const min=Math.floor(S.settings.total/2)+1,max=S.settings.total-1;
+  const [min,max]=scoreRange();
   if(isNaN(v)){toast('Enter a number',1);return}
-  if(!S.settings.allowOverride&&(v<min||v>max)){toast(`Winning score must be ${min}–${max} (turn on admin override in Settings)`,1);return}
+  if(!S.settings.allowOverride&&(v<min||v>max)){
+    toast(`${isFirstTo()?"Loser's score":'Winning score'} must be ${min}–${max} (admin override is in Settings)`,1);return}
   if(v<0||v>S.settings.total){toast('Score out of range',1);return}
-  S.current.courts[i].winScore=v;render();
+  applyScore(S.current.courts[i],v);render();
 }
 function finishRound(){
   const cur=S.current;if(!cur)return;
-  if(!cur.courts.every(c=>c.winner&&c.winScore!=null)){toast('Enter a winner and score for every court',1);return}
+  if(!cur.courts.every(c=>c.winner&&hasScore(c))){toast('Enter a winner and score for every court',1);return}
   S.rounds.push({n:cur.n,resting:[...cur.resting],
-    courts:cur.courts.map(c=>({a:[...c.a],b:[...c.b],winner:c.winner,winScore:c.winScore}))});
+    courts:cur.courts.map(c=>({a:[...c.a],b:[...c.b],winner:c.winner,winScore:c.winScore,loseScore:lossOf(c)}))});
   S.forced={pairs:[],match:null};
   S.current=null;sel=null;window.scrollTo(0,0);
   render();toast(`Round ${S.rounds.length} saved`);

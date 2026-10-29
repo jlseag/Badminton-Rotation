@@ -38,8 +38,15 @@ JSON backup, and **Import session** to move a session to another device.
    - **The court padlock** is separate and only lasts the round — it keeps that court intact
      when you press Regenerate.
 5. **Confirm Round** — teams become official.
-6. **Enter results** — tap the winning team, tap the winning score. The losing score is
-   `21 − winning score` (the total is configurable).
+6. **Enter results** — tap the winning team, then tap one number. Which number depends on the
+   scoring mode in Settings:
+   - **Combined score** (default) — both scores add up to the total, so you enter the
+     **winner's** score and the loser gets the remainder. 14 means 14–7 out of 21.
+   - **First to** — play until a team reaches the target, so you enter the **loser's**
+     score. 17 means 21–17.
+
+   Either mode takes any total: presets for 15 / 21 / 25 / 30, or set your own. Each finished
+   round stores both scores, so changing mode later never rewrites what you already played.
 7. **Finish Round** — points, games played, rests, partner and opponent history all update,
    and the next round is suggested automatically.
 8. **End game** — stop whenever you like and get the final score: champion, podium and the full
