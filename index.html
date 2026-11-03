@@ -163,7 +163,10 @@ nav button.on{color:var(--court);background:rgba(14,138,79,.11)}
 .court-h{display:flex;align-items:center;gap:8px;padding:11px 14px;color:#fff;
   background:repeating-linear-gradient(90deg,rgba(255,255,255,.12) 0 2px,transparent 2px 46px),
              linear-gradient(135deg,var(--court-l),var(--court-d))}
-.court-h .cn{font-family:Fredoka,sans-serif;font-weight:600;font-size:16px;white-space:nowrap}
+.court-h .cn{font-family:Fredoka,sans-serif;font-weight:600;font-size:16px;white-space:nowrap;
+  min-width:0;overflow:hidden;text-overflow:ellipsis}
+.ctier{font-family:Nunito,sans-serif;font-weight:800;font-size:11px;color:rgba(255,255,255,.8);
+  margin-left:7px;letter-spacing:.3px}
 .court-b{padding:14px}
 .team{border:2px solid var(--line);border-bottom-width:3px;border-radius:var(--r-sm);padding:12px;
   background:var(--white);display:block;width:100%;text-align:left}
@@ -335,7 +338,7 @@ function defState(){return{
   settings:{
     courts:2, mode:'combined', total:21, earlyRounds:4,
     partnerStrict:4, oppStrict:3, balance:3, restFair:4,
-    initialSkillLater:true, rankBy:'points', allowOverride:false, noise:3
+    pairing:'social', rankBy:'points', allowOverride:false, noise:3
   }
 };}
 let S=defState(), tab='game', sel=null, dragId=null, editRound=null;
@@ -361,6 +364,7 @@ const pk=(a,b)=>a<b?a+'|'+b:b+'|'+a;
 /* skill tiers — Advanced is strongest. The players array stays the single skill
    order; tier just groups it, and sorting by tier keeps the two in step. */
 const TIERS=[['adv','Advanced'],['int','Intermediate'],['beg','Beginner'],['new','Newbie']];
+const TIER_SHORT={adv:'Adv',int:'Int',beg:'Beg',new:'New'};
 const TIER_I=t=>{const i=TIERS.findIndex(x=>x[0]===t);return i<0?1:i};
 const tierOf=p=>p&&TIERS.some(x=>x[0]===p.tier)?p.tier:'int';
 function sortByTier(){            // stable: order inside a tier is preserved
@@ -436,7 +440,6 @@ function strengths(st){
   const n=S.players.length, out={};
   const rd=roundsDone(), er=Math.max(1,S.settings.earlyRounds);
   let phaseW = rd<er ? .7 : rd<er*2 ? .4 : .2;                 // initial-skill weight by phase
-  if(!S.settings.initialSkillLater&&rd>=er) phaseW=0;
   S.players.forEach((p,i)=>{
     const init = n<2?50:100-100*i/(n-1);                        // rank 1 => 100, last => 0
     const s=st[p.id];
@@ -555,10 +558,6 @@ function generateRound(keepLocks){
     pairUnits.push({ids:[...pr],lock:true});take(pr);
   });
 
-  const singles=S.players.map(p=>p.id).filter(id=>!used.has(id)&&!restSet.has(id));
-  const singlesNeeded=openCourts*4-pairUnits.length*2;
-  if(singles.length!==singlesNeeded)return{error:'Could not fit the locked or forced pairings into the available courts.'};
-
   // stable per-pair jitter => social variety without confusing the optimiser
   const jit={};
   const noiseAmt=(isCompetitive()?2:6)*(S.settings.noise/3);
@@ -603,6 +602,65 @@ function generateRound(keepLocks){
     p+=Wb*.6*sd*sums.length/2;                                  // spread of team strengths overall
     return p;
   };
+
+  // ---- Same level: courts are cut straight out of the skill order ----
+  if(S.settings.pairing==='level'){
+    const playing=S.players.filter(p=>!restSet.has(p.id));   // already in tier order
+    const seen=new Set(), units=[];
+    playing.forEach(p=>{
+      if(seen.has(p.id))return;
+      const mate=lockedMate(p.id);
+      if(mate&&P(mate)&&!restSet.has(mate)&&!seen.has(mate)){
+        units.push([p.id,mate]); seen.add(p.id); seen.add(mate);
+      }else{units.push([p.id]); seen.add(p.id)}
+    });
+    const pool=units.slice(), built=[];
+    while(pool.length&&built.length<courts){
+      const four=[];
+      while(four.length<4){
+        const i=pool.findIndex(u=>four.length+u.length<=4);
+        if(i<0)break;
+        four.push(...pool.splice(i,1)[0]);
+      }
+      if(four.length===4)built.push(four); else break;
+    }
+    if(built.length===courts){
+      const cs=built.map(four=>{
+        const [a,b,c,d]=four;
+        const opts=[[[a,b],[c,d]],[[a,c],[b,d]],[[a,d],[b,c]]]
+          .filter(([t1,t2])=>!four.some(x=>{                 // never split a locked pair
+            const m=lockedMate(x);
+            return m&&four.includes(m)&&!(t1.includes(x)&&t1.includes(m))&&!(t2.includes(x)&&t2.includes(m));
+          }));
+        // the four players are already fixed, so only the split can even the game up:
+        // lean much harder on balance here than the free-for-all mixer does
+        // The four players are fixed, so only the split can even the game up — and a
+        // tier of four offers just six possible pairs, so repeats are forced. The
+        // mixer's quadratic repeat penalty would explode here and swamp balance, so
+        // use a linear one: spread the repeats around rather than fight them.
+        const splitPen=cc=>{
+          const gap=Math.abs(sum(cc.a)-sum(cc.b));
+          let p=Wb*4*(gap+gap*gap/40);
+          [cc.a,cc.b].forEach(t=>{
+            p+=Wp*.25*(st[t[0]].partners[t[1]]||0);
+            const lp=st[t[0]].lastPartner[t[1]];
+            if(lp!=null)p+=Wp*.35*Math.max(0,3-(rd-lp));     // just not twice running
+          });
+          return p;
+        };
+        const use=(opts.length?opts:[[[a,b],[c,d]]])
+          .map(([t1,t2])=>({c:{a:t1,b:t2},p:splitPen({a:t1,b:t2})}))
+          .sort((x,y)=>x.p-y.p)[0].c;
+        return {a:use.a,b:use.b,locked:false,forced:false,winner:null,winScore:null,loseScore:null};
+      });
+      return {round:{n:roundsDone()+1,courts:cs,resting,confirmed:false},dropped:0};
+    }
+    // couldn't tile cleanly (locked pairs straddling a boundary) — fall through to the mixer
+  }
+
+  const singles=S.players.map(p=>p.id).filter(id=>!used.has(id)&&!restSet.has(id));
+  const singlesNeeded=openCourts*4-pairUnits.length*2;
+  if(singles.length!==singlesNeeded)return{error:'Could not fit the locked or forced pairings into the available courts.'};
 
   // ---- randomised construction + hill climbing ----
   const build=()=>{
@@ -653,6 +711,11 @@ function generateRound(keepLocks){
   return{round:{n:roundsDone()+1,courts:cs,resting,confirmed:false},dropped:drop.length};
 }
 
+function courtTiers(c){            // which skill groups are on this court, in order
+  const seen=[];
+  TIERS.forEach(([k])=>{ if([...c.a,...c.b].some(id=>tierOf(P(id))===k))seen.push(TIER_SHORT[k]) });
+  return seen.join(' + ');
+}
 function balanceOf(c,str){
   const d=Math.abs((str[c.a[0]]+str[c.a[1]])-(str[c.b[0]]+str[c.b[1]]));
   return clamp(Math.round(100-d*2),0,100);
@@ -788,7 +851,7 @@ function viewGame(st){
     const s=st[id]||{pts:0,games:0};
     return `<button class="chip ${sel===id?'sel':''}" data-pid="${id}" ${draft&&!loc?'draggable="true"':''}
       onclick="${draft?(loc?`toast('This court is locked','1')`:`tapPlayer('${id}')`):'null'}">
-      <span>${esc(nameOf(id))}</span><span class="st">${s.pts} pts · ${s.games}g</span></button>`;
+      <span>${esc(nameOf(id))}</span><span class="st">${s.pts} pts · ${s.games} ${s.games===1?'game':'games'}</span></button>`;
   };
   const teamBlock=(c,side,ci)=>{
     const t=c[side], lk=isLockedPair(t[0],t[1]), loc=c.locked||lk;
@@ -816,7 +879,7 @@ function viewGame(st){
       ${cur.resting.map(id=>`<button class="pill ${sel===id?'sel':''}" data-pid="${id}" ${draft?'draggable="true"':''}
         style="${sel===id?'border-color:var(--acc);background:rgba(61,220,132,.14)':''}"
         onclick="${draft?`tapPlayer('${id}')`:'null'}">${esc(nameOf(id))}
-        <span style="color:var(--dim2);font-size:11px">${(st[id]||{}).games||0}g</span></button>`).join('')}
+        <span style="color:var(--ink3);font-size:11.5px;font-weight:800">${(st[id]||{}).games||0} ${((st[id]||{}).games||0)===1?'game':'games'}</span></button>`).join('')}
     </div>
   </div>`:'<div class="card tight"><span class="mini">Everyone plays this round</span></div>'}
 
@@ -827,7 +890,7 @@ function viewGame(st){
     const col=b>=85?'var(--acc)':b>=70?'var(--warn)':'var(--bad)';
     return `<div class="court ${c.locked?'locked':''}">
       <div class="court-h">
-        <span class="cn">Court ${i+1}</span>
+        <span class="cn">Court ${i+1}${S.settings.pairing==='level'?`<span class="ctier">${courtTiers(c)}</span>`:''}</span>
         ${c.forced?'<span class="tag b">Forced</span>':''}
         <span class="bal" style="color:${col}">${draft?lbl.slice(0,2):lbl} ${b}%
           <span class="balbar"><i style="width:${b}%;background:${col}"></i></span></span>
@@ -1249,6 +1312,18 @@ function viewSettings(){
         onchange="setSetting('total',clamp(+this.value||21,5,99))">
     </div>
   </div>
+  <div class="sec-h">Match style</div>
+  <div class="card">
+    <div class="seg" style="margin-bottom:4px">
+      <button class="${s.pairing!=='level'?'on':''}" onclick="setPairing('social')">Social mix</button>
+      <button class="${s.pairing==='level'?'on':''}" onclick="setPairing('level')">Same level</button>
+    </div>
+    <div class="muted" style="padding:10px 2px 2px">${s.pairing==='level'
+      ? `Advanced play Advanced, Intermediate play Intermediate, and so on. When a group cannot fill a
+         court of four it borrows the nearest players from the next group down.`
+      : `Everyone mixes with everyone. Teams are built to be even across skill levels, so a stronger
+         player gets a weaker partner.`}</div>
+  </div>
   <div class="sec-h">Matchmaking weights</div>
   <div class="card">
     ${sl('partnerStrict','Partner-repeat strictness','Higher = harder to get the same partner twice',1,5)}
@@ -1256,9 +1331,7 @@ function viewSettings(){
     ${sl('balance','Match balance importance','Higher = closer, more even games',1,5)}
     ${sl('restFair','Rest fairness importance','Higher = playing time evened out faster',1,5)}
     ${sl('noise','Social randomness','Higher = more shuffling, less optimal',1,5)}
-    <div class="sl"><span class="lab">Initial Skill Rank in later rounds<small>Keep using the entered order after warm-up</small></span>
-      <div class="seg" style="width:130px"><button class="${s.initialSkillLater?'on':''}" onclick="setSetting('initialSkillLater',true)">On</button>
-      <button class="${!s.initialSkillLater?'on':''}" onclick="setSetting('initialSkillLater',false)">Off</button></div></div>
+
   </div>
   <div class="sec-h">Ranking</div>
   <div class="card">
@@ -1317,6 +1390,13 @@ function clearLiveScores(){      // a half-entered round is meaningless under ne
     c.winner=null;c.winScore=null;c.loseScore=null;
   });
   return had;
+}
+function setPairing(v){
+  if(S.settings.pairing===v)return;
+  S.settings.pairing=v;
+  if(S.current&&!S.current.confirmed)S.current=null;
+  render();
+  toast(v==='level'?'Same level \u2014 groups play among themselves':'Social mix \u2014 everyone mixes');
 }
 function setMode(m){
   if(S.settings.mode===m)return;

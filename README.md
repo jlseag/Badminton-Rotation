@@ -47,6 +47,15 @@ JSON backup, and **Import session** to move a session to another device.
    Either mode takes any total: presets for 15 / 21 / 25 / 30, or set your own. Each finished
    round stores both scores, so changing mode later never rewrites what you already played.
 
+**Match style** in Settings decides who meets whom:
+
+- **Social mix** (default) — everyone mixes with everyone, and teams are built to be even across
+  skill levels, so a stronger player gets a weaker partner.
+- **Same level** — courts are cut straight out of the skill order, so Advanced play Advanced and
+  so on. When a group cannot fill a court of four it borrows the nearest players from the next
+  group down. Expect closer-matched *opponents* but less even scorelines and far fewer different
+  partners: a group of four only has six possible pairings.
+
 Players are grouped into **Advanced / Intermediate / Beginner / Newbie** — Advanced is strongest,
 and it is entirely up to you how many go in each. Press and hold a name to drag it between groups
 or within one; the number beside it is their overall rank, which is what the matchmaker uses.
@@ -74,6 +83,9 @@ the lowest total penalty, weighted roughly like this:
 | Medium | In competitive mode, split the top players onto opposite sides of the net |
 | Low | Opponent variety |
 | Low | Social randomness |
+
+Your entered skill order always keeps some weight — 70% during the first four rounds, easing to
+20% once there is plenty of real data, but never zero.
 
 **Player strength** starts as the Initial Skill Rank you entered and shifts toward real
 performance (points per game, weighted toward recent games) as rounds are played:
