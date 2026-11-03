@@ -339,6 +339,7 @@ tr.rest td:nth-child(2)::after{content:"RESTING";font-size:9px;font-weight:900;c
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
+const BUILD='v17';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -1379,7 +1380,8 @@ function viewSettings(){
       <div class="seg" style="width:130px"><button class="${s.allowOverride?'on':''}" onclick="setSetting('allowOverride',true)">On</button>
       <button class="${!s.allowOverride?'on':''}" onclick="setSetting('allowOverride',false)">Off</button></div></div>
   </div>
-  <div class="muted" style="text-align:center;padding:8px 0 20px">Everything is stored on this device only.</div>`;
+  <div class="muted" style="text-align:center;padding:8px 0 20px">Everything is stored on this device only.<br>
+    <span class="mini" style="letter-spacing:.6px">Version ${BUILD}</span></div>`;
 }
 
 /* =========================== actions ===================================== */
