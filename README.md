@@ -39,22 +39,22 @@ JSON backup, and **Import session** to move a session to another device.
 5. **Confirm Round** — teams become official.
 6. **Enter results** — tap the winning team, then tap one number. Which number depends on the
    scoring mode in Settings:
-   - **Combined score** (default) — both scores add up to the total, so you enter the
-     **winner's** score and the loser gets the remainder. 14 means 14–7 out of 21.
-   - **First to** — play until a team reaches the target, so you enter the **loser's**
-     score. 17 means 21–17.
+   - **First to** (default) — play until a team reaches the target, so you enter the
+     **loser's** score. 17 means 21–17.
+   - **Combined score** — both scores add up to the total, so you enter the **winner's**
+     score and the loser gets the remainder. 14 means 14–7 out of 21.
 
    Either mode takes any total: presets for 15 / 21 / 25 / 30, or set your own. Each finished
    round stores both scores, so changing mode later never rewrites what you already played.
 
 **Match style** in Settings decides who meets whom:
 
-- **Social mix** (default) — everyone mixes with everyone, and teams are built to be even across
-  skill levels, so a stronger player gets a weaker partner.
-- **Same level** — courts are cut straight out of the skill order, so Advanced play Advanced and
+- **Same level** (default) — courts are cut straight out of the skill order, so Advanced play Advanced and
   so on. When a group cannot fill a court of four it borrows the nearest players from the next
   group down. Expect closer-matched *opponents* but less even scorelines and far fewer different
   partners: a group of four only has six possible pairings.
+- **Social mix** — everyone mixes with everyone, and teams are built to be even across skill
+  levels, so a stronger player gets a weaker partner.
 
 Players are grouped into **Advanced / Upper Int. / Intermediate / Beginner** — Advanced is strongest,
 and it is entirely up to you how many go in each. Press and hold a name to drag it between groups

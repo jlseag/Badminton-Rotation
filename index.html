@@ -350,9 +350,9 @@ function defState(){return{
   forced:{pairs:[],match:null},
   locks:[],                   // [[idA,idB],...] — locked partners, kept every round until unlocked
   settings:{
-    courts:2, mode:'combined', total:21, earlyRounds:4,
+    courts:2, mode:'firstto', total:21, earlyRounds:4,
     partnerStrict:4, oppStrict:3, balance:3, restFair:4,
-    pairing:'social', rankBy:'points', allowOverride:false, noise:3
+    pairing:'level', rankBy:'points', allowOverride:false, noise:3
   }
 };}
 let S=defState(), tab='game', sel=null, dragId=null, editRound=null;
@@ -362,6 +362,10 @@ function load(){
   try{const r=localStorage.getItem(LS); if(!r)return;
     const o=JSON.parse(r); if(o&&o.v===1){S=Object.assign(defState(),o);
       S.settings=Object.assign(defState().settings,o.settings||{});
+      if(o.settings){                       // pre-existing session: don't change its rules
+        if(o.settings.mode===undefined)S.settings.mode='combined';
+        if(o.settings.pairing===undefined)S.settings.pairing='social';
+      }
       S.forced=Object.assign({pairs:[],match:null},o.forced||{});
       S.locks=Array.isArray(o.locks)?o.locks.filter(x=>Array.isArray(x)&&x.length===2):[];
       S.players.forEach(p=>{if(p.tier==='new')p.tier='beg';
@@ -1311,8 +1315,8 @@ function viewSettings(){
   <div class="sec-h">Scoring</div>
   <div class="card">
     <div class="seg" style="margin-bottom:4px">
-      <button class="${s.mode!=='firstto'?'on':''}" onclick="setMode('combined')">Combined score</button>
       <button class="${s.mode==='firstto'?'on':''}" onclick="setMode('firstto')">First to</button>
+      <button class="${s.mode!=='firstto'?'on':''}" onclick="setMode('combined')">Combined score</button>
     </div>
     <div class="muted" style="padding:10px 2px 4px">${s.mode==='firstto'
       ? `Play until a team reaches <b>${s.total}</b>. You enter the <b>loser's</b> score, so 17 means ${s.total}\u201317.`
@@ -1331,8 +1335,8 @@ function viewSettings(){
   <div class="sec-h">Match style</div>
   <div class="card">
     <div class="seg" style="margin-bottom:4px">
-      <button class="${s.pairing!=='level'?'on':''}" onclick="setPairing('social')">Social mix</button>
       <button class="${s.pairing==='level'?'on':''}" onclick="setPairing('level')">Same level</button>
+      <button class="${s.pairing!=='level'?'on':''}" onclick="setPairing('social')">Social mix</button>
     </div>
     <div class="muted" style="padding:10px 2px 2px">${s.pairing==='level'
       ? `Advanced play Advanced, Intermediate play Intermediate, and so on. When a group cannot fill a
