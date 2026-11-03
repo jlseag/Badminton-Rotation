@@ -33,11 +33,9 @@ JSON backup, and **Import session** to move a session to another device.
    2 courts simply plays 1 court with 2 resting. It adapts every round as people arrive or leave.
 4. **Adjust if you want** — tap any two players to swap them (including a resting player),
    or add a Custom Pairing. Nothing is recorded while you edit.
-   - **Lock pair** makes two players permanent partners. They are put on the same team every
-     round until you unlock them, they sit out together rather than being split up, and neither
-     can be swapped away. Unlock from the pair itself or the Locked partners list.
-   - **The court padlock** is separate and only lasts the round — it keeps that court intact
-     when you press Regenerate.
+   - **Force pair** makes two players permanent partners. They go on the same team every round
+     until you remove them, they sit out together rather than being split up, and neither can be
+     swapped away. Remove them from the Forced pairs list.
 5. **Confirm Round** — teams become official.
 6. **Enter results** — tap the winning team, then tap one number. Which number depends on the
    scoring mode in Settings:
@@ -48,6 +46,11 @@ JSON backup, and **Import session** to move a session to another device.
 
    Either mode takes any total: presets for 15 / 21 / 25 / 30, or set your own. Each finished
    round stores both scores, so changing mode later never rewrites what you already played.
+
+Players are grouped into **Advanced / Intermediate / Beginner / Newbie** — Advanced is strongest,
+and it is entirely up to you how many go in each. Press and hold a name to drag it between groups
+or within one; the number beside it is their overall rank, which is what the matchmaker uses.
+Tap a name to rename them, move them, or take them out of the session.
 
 The Players tab shows names and skill order only. Current strength, the partner matrix and the
 opponent matrix are still computed every round — they drive the matchmaking — they are simply

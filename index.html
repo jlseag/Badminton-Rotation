@@ -137,6 +137,24 @@ nav button.on{color:var(--court);background:rgba(14,138,79,.11)}
   display:flex;align-items:center;justify-content:center;color:var(--ink2);font-size:15px;font-weight:900}
 .ibtn.dan{color:var(--red);background:var(--red-l);border-color:#F3CECE}
 .handle{cursor:grab;color:var(--ink3);padding:0 2px;font-size:16px;letter-spacing:-2px}
+.grip{margin-left:auto;color:var(--ink3);font-size:15px;letter-spacing:-3px;padding:0 4px;flex:none}
+#plist{display:flex;flex-direction:column;gap:16px}
+.tier-h{display:flex;align-items:center;gap:10px;margin:0 2px 9px}
+.tier-n{font-family:Fredoka,sans-serif;font-size:20px;font-weight:600;color:var(--court-d);letter-spacing:-.3px}
+.tier-c{min-width:26px;height:26px;padding:0 8px;border-radius:999px;background:var(--lime);color:var(--limeink);
+  font-size:12px;font-weight:900;display:flex;align-items:center;justify-content:center}
+.tier-h::after{content:"";flex:1;height:3px;border-radius:2px;background:var(--line)}
+.tier-body{display:flex;flex-direction:column;gap:9px;min-height:54px}
+.tier-empty{border:2px dashed var(--line2);border-radius:var(--r-sm);padding:14px;text-align:center;
+  color:var(--ink3);font-size:13px;font-weight:700}
+.pitem{touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.pitem.lifted{position:fixed;z-index:300;pointer-events:none;margin:0;
+  box-shadow:0 14px 30px rgba(15,36,25,.28);transform:scale(1.03);border-color:var(--court)}
+.pitem.placeholder{background:rgba(14,138,79,.09);border:2px dashed var(--court);box-shadow:none}
+.tierpick{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+.tierpick button{min-height:48px;border-radius:12px;background:var(--white);border:2px solid var(--line);
+  border-bottom-width:4px;border-bottom-color:var(--line2);font-weight:800;font-size:14px}
+.tierpick button.on{background:var(--court);color:#fff;border-color:var(--court-d);border-bottom-color:var(--court-x)}
 
 /* ---------- courts ---------- */
 .court{background:var(--card);border:2px solid var(--line);border-radius:var(--r);overflow:hidden;
@@ -329,6 +347,7 @@ function load(){
       S.settings=Object.assign(defState().settings,o.settings||{});
       S.forced=Object.assign({pairs:[],match:null},o.forced||{});
       S.locks=Array.isArray(o.locks)?o.locks.filter(x=>Array.isArray(x)&&x.length===2):[];
+      S.players.forEach(p=>{if(!TIERS.some(x=>x[0]===p.tier))p.tier='int'});
       // sessions saved before scoring modes existed only stored the winner's score
       const T=S.settings.total;
       (S.rounds||[]).forEach(r=>(r.courts||[]).forEach(c=>{
@@ -339,6 +358,16 @@ const P=id=>S.players.find(p=>p.id===id);
 const nameOf=id=>{const p=P(id);return p?p.name:'?'};
 const teamName=t=>t.map(nameOf).join(' + ');
 const pk=(a,b)=>a<b?a+'|'+b:b+'|'+a;
+/* skill tiers — Advanced is strongest. The players array stays the single skill
+   order; tier just groups it, and sorting by tier keeps the two in step. */
+const TIERS=[['adv','Advanced'],['int','Intermediate'],['beg','Beginner'],['new','Newbie']];
+const TIER_I=t=>{const i=TIERS.findIndex(x=>x[0]===t);return i<0?1:i};
+const tierOf=p=>p&&TIERS.some(x=>x[0]===p.tier)?p.tier:'int';
+function sortByTier(){            // stable: order inside a tier is preserved
+  S.players=S.players.map((p,i)=>({p,i}))
+    .sort((a,b)=>TIER_I(tierOf(a.p))-TIER_I(tierOf(b.p))||a.i-b.i)
+    .map(x=>x.p);
+}
 /* scoring modes -------------------------------------------------------------
    combined : both scores add up to settings.total — you enter the WINNER's score
    firstto  : winner reaches settings.total        — you enter the LOSER's score   */
@@ -708,16 +737,9 @@ function viewSetup(){
   </div>
 
   <div class="sec-h">Players (${n})</div>
-  ${n?`<div class="plist" id="setupList">${S.players.map((p,i)=>`
-    <div class="pitem" draggable="true" data-i="${i}">
-      <span class="handle">≡</span>
-      <span class="pnum ${i===0?'s1':''}">${i+1}</span>
-      <span class="pname" onclick="renamePlayer('${p.id}')">${esc(p.name)}</span>
-      <button class="ibtn" onclick="movePlayer(${i},-1)" ${i===0?'disabled style="opacity:.25"':''}>↑</button>
-      <button class="ibtn" onclick="movePlayer(${i},1)" ${i===n-1?'disabled style="opacity:.25"':''}>↓</button>
-      <button class="ibtn dan" onclick="delPlayer('${p.id}')">×</button>
-    </div>`).join('')}</div>`
-   :`<div class="card"><div class="empty"><span class="ic">🏸</span><b>No players yet</b>Add everyone in rough skill order</div></div>`}
+  ${n?`<div class="muted" style="margin:-4px 4px 12px">Advanced is strongest. <b>Press and hold</b> a name to drag it between groups.
+      Tap a name to rename or remove.</div>${tierList()}`
+   :`<div class="card"><div class="empty"><span class="ic">\u{1F3F8}</span><b>No players yet</b>Add everyone, then sort them into groups</div></div>`}
 
   <div class="sec-h">Courts</div>
   <div class="card">
@@ -740,7 +762,6 @@ function viewSetup(){
    : ac<c ? `<div class="note">${n} players fills <b>${ac} court${ac>1?'s':''}</b>${n-playing?` with ${n-playing} resting each round`:''}. Courts is a maximum — the app only uses what you can fill.</div>`
    : ''}
   <button class="btn pri full" style="margin-top:6px" onclick="startSession()" ${n?'':'disabled'}>Start Session</button>
-  <button class="btn gho full" style="margin-top:10px" onclick="loadDemo()">Load 8 example players</button>
   ${localStorage.getItem(LS)?`<button class="btn dan full" style="margin-top:10px" onclick="hardReset()">Reset all saved data</button>`:''}
   `;
 }
@@ -778,8 +799,7 @@ function viewGame(st){
                    :'<span class="mini">New partnership</span>';
       return `<div class="team ${lk?'lockedpair':''}">
         <div class="tnames">${t.map(id=>chip(id,loc)).join('')}</div>
-        <div class="row" style="margin-top:9px">${hint}<span class="sp"></span>
-        <button class="btn xs ${lk?'lockon':''}" onclick="toggleTeamLock(${ci},'${side}')">${lk?'🔒 Unlock':'Lock pair'}</button></div></div>`;
+        <div class="row" style="margin-top:9px">${hint}</div></div>`;
     }
     const w=c.winner===side, l=c.winner&&c.winner!==side;
     return `<button class="team ${w?'win':''} ${l?'lose':''}" onclick="pickWinner(${ci},'${side}')">
@@ -809,7 +829,6 @@ function viewGame(st){
       <div class="court-h">
         <span class="cn">Court ${i+1}</span>
         ${c.forced?'<span class="tag b">Forced</span>':''}
-        ${draft?`<button class="btn xs" style="margin-left:2px;padding:0 9px" title="Lock this court" onclick="toggleCourtLock(${i})">${c.locked?'🔒':'🔓'}</button>`:''}
         <span class="bal" style="color:${col}">${draft?lbl.slice(0,2):lbl} ${b}%
           <span class="balbar"><i style="width:${b}%;background:${col}"></i></span></span>
       </div>
@@ -903,7 +922,8 @@ function scoreUI(c,i){
   return `<div style="margin-top:12px;border-top:1px solid var(--line);padding-top:10px">
     <div class="mini">${ft?`Loser's score \u00b7 first to ${S.settings.total}`
                          :`Winning score \u00b7 total ${S.settings.total}`}</div>
-    ${ws!=null?`<div class="score"><span class="w">${ws}</span><span class="l">\u2013</span><span>${ls}</span></div>`:''}
+    ${ws!=null?`<div class="score"><span class="w">${ws}</span><span class="l">\u2013</span><span>${ls}</span></div>`
+             :ft?`<div class="score"><span class="w">${S.settings.total}</span><span class="l">\u2013</span><span class="l">?</span></div>`:''}
     <div class="scorepick${opts.length>12?' wide':''}">${opts.map(v=>
       `<button class="${picked===v?'on':''}" onclick="setScore(${i},${v})">${v}</button>`).join('')}</div>
     ${S.settings.allowOverride?`<div class="row" style="margin-top:8px">
@@ -914,32 +934,14 @@ function scoreUI(c,i){
 }
 
 function forcedUI(){
-  const f=S.forced;
-  const opts=(exclude,selId)=>'<option value="">—</option>'+S.players.filter(p=>!exclude.has(p.id)||p.id===selId)
-    .map(p=>`<option value="${p.id}" ${p.id===selId?'selected':''}>${esc(p.name)}</option>`).join('');
-  const used=new Set();f.pairs.forEach(p=>p.forEach(i=>used.add(i)));
-  if(f.match)[...f.match.a,...f.match.b].forEach(i=>used.add(i));
   return `
-  ${S.locks.length?`<div class="sec-h">Locked partners</div>
+  <div class="sec-h">Forced pairs</div>
   <div class="card">
-    ${S.locks.map((l,i)=>`<div class="row" style="margin-bottom:9px">
-      <span class="pill" style="flex:1;border-color:var(--court);color:var(--court-d)">🔒 ${esc(nameOf(l[0]))} + ${esc(nameOf(l[1]))}</span>
-      <button class="ibtn dan" onclick="unlockPair(${i})">×</button></div>`).join('')}
-    <div class="muted">These two stay on the same team every round — and sit out together — until you unlock them.</div>
-  </div>`:''}
-  <div class="sec-h">Custom pairings</div>
-  <div class="card">
-    ${f.pairs.length?f.pairs.map((p,i)=>`<div class="row" style="margin-bottom:8px">
-      <span class="pill" style="flex:1">${esc(nameOf(p[0]))} + ${esc(nameOf(p[1]))}</span>
-      <button class="ibtn dan" onclick="removePair(${i})">×</button></div>`).join(''):''}
-    ${f.match?`<div class="row" style="margin-bottom:8px">
-      <span class="pill" style="flex:1;font-size:13px">${esc(teamName(f.match.a))} <b style="color:var(--dim2)">vs</b> ${esc(teamName(f.match.b))}</span>
-      <button class="ibtn dan" onclick="S.forced.match=null;regen()">×</button></div>`:''}
-    <div class="grid2">
-      <button class="btn sm" onclick="pairDialog()">+ Force pair</button>
-      <button class="btn sm" onclick="matchDialog()">+ Force matchup</button>
-    </div>
-    <div class="muted" style="margin-top:10px">Forced pairings always win over the algorithm. The rest of the round is built around them.</div>
+    ${S.locks.length?S.locks.map((l,i)=>`<div class="row" style="margin-bottom:9px">
+      <span class="pill" style="flex:1;border-color:var(--court);color:var(--court-d)">\u{1F512} ${esc(nameOf(l[0]))} + ${esc(nameOf(l[1]))}</span>
+      <button class="ibtn dan" onclick="unlockPair(${i})">\u00d7</button></div>`).join(''):''}
+    <button class="btn sm full" onclick="pairDialog()">+ Force pair</button>
+    <div class="muted" style="margin-top:10px">A forced pair stays on the same team every round \u2014 and sits out together \u2014 until you remove it.</div>
   </div>`;
 }
 
@@ -1011,25 +1013,159 @@ function highlights(st){
 }
 
 /* ---------------- players ------------------------------------------------ */
+function tierList(){
+  let n=0;
+  const rows=TIERS.map(([key,label])=>{
+    const inTier=S.players.filter(p=>tierOf(p)===key);
+    return `<div class="tier" data-tier="${key}">
+      <div class="tier-h"><span class="tier-n">${label}</span><span class="tier-c">${inTier.length}</span></div>
+      <div class="tier-body">
+        ${inTier.length?inTier.map(p=>{
+          n++;
+          return `<div class="pitem" data-id="${p.id}">
+            <span class="pnum ${n===1?'s1':''}">${n}</span>
+            <span class="pname">${esc(p.name)}</span>
+            <span class="grip">\u22ee\u22ee</span>
+          </div>`;
+        }).join(''):'<div class="tier-empty">Drag someone here</div>'}
+      </div>
+    </div>`;
+  }).join('');
+  return `<div id="plist">${rows}</div>`;
+}
+
 function viewPlayers(st){
-  const n=S.players.length;
   return `
   <div class="card">
-    <div class="row"><input id="newName" placeholder="Add a player mid-session" autocomplete="off" enterkeyhint="done">
+    <div class="row"><input id="newName" placeholder="Add a player" autocomplete="off" enterkeyhint="done">
       <button class="btn pri" style="flex:none;padding:0 18px" onclick="addPlayer()">Add</button></div>
-    <div class="muted" style="margin-top:8px">New players start on 0 points / 0 games and get priority for playing time.
-      Drag them to the right skill position below.</div>
+    <div class="muted" style="margin-top:8px">New players join as Intermediate on 0 points, and get priority for playing time.</div>
   </div>
   <div class="sec-h">Skill order</div>
-  <div class="plist" id="setupList">${S.players.map((p,i)=>`
-    <div class="pitem" draggable="true" data-i="${i}">
-      <span class="handle">≡</span><span class="pnum ${i===0?'s1':''}">${i+1}</span>
-      <span class="pname" onclick="renamePlayer('${p.id}')">${esc(p.name)}</span>
-      <button class="ibtn" onclick="movePlayer(${i},-1)" ${i===0?'disabled style="opacity:.25"':''}>↑</button>
-      <button class="ibtn" onclick="movePlayer(${i},1)" ${i===n-1?'disabled style="opacity:.25"':''}>↓</button>
-      <button class="ibtn dan" onclick="delPlayer('${p.id}')">×</button>
-    </div>`).join('')}</div>`;
+  <div class="muted" style="margin:-4px 4px 12px">Advanced is strongest. <b>Press and hold</b> a name to drag it \u2014 between groups or within one.
+    Tap a name to rename or remove. The number is their overall rank.</div>
+  ${tierList()}`;
 }
+
+/* ---- long-press drag: reorder players and move them between tiers ---- */
+let dragger=null;
+function wirePlayerDrag(){
+  const list=$('#plist'); if(!list)return;
+  list.querySelectorAll('.pitem').forEach(el=>{
+    el.addEventListener('pointerdown',pdDown);
+    el.addEventListener('contextmenu',e=>e.preventDefault());
+  });
+}
+function pdDown(e){
+  if(e.button!==undefined&&e.button>0)return;
+  const el=e.currentTarget, sx=e.clientX, sy=e.clientY;
+  let moved=false;
+  const timer=setTimeout(()=>{if(!moved)startDrag(el,sx,sy,e.pointerId)},300);
+  const move=ev=>{if(Math.abs(ev.clientX-sx)>9||Math.abs(ev.clientY-sy)>9){moved=true;done()}};
+  const up=()=>{clearTimeout(timer);done();if(!moved&&!dragger)playerSheet(el.dataset.id)};
+  function done(){clearTimeout(timer);
+    el.removeEventListener('pointermove',move);el.removeEventListener('pointerup',up);
+    el.removeEventListener('pointercancel',done);}
+  el.addEventListener('pointermove',move);
+  el.addEventListener('pointerup',up);
+  el.addEventListener('pointercancel',done);
+}
+function startDrag(el,sx,sy,pid){
+  const r=el.getBoundingClientRect();
+  const ph=document.createElement('div');
+  ph.className='pitem placeholder'; ph.style.height=r.height+'px';
+  el.parentNode.insertBefore(ph,el);
+  el.classList.add('lifted');
+  el.style.width=r.width+'px'; el.style.height=r.height+'px';
+  el.style.left=r.left+'px'; el.style.top=r.top+'px';
+  document.body.appendChild(el);
+  dragger={el,ph,dx:sx-r.left,dy:sy-r.top,x:sx,y:sy,dir:0,raf:null};
+  try{if(navigator.vibrate)navigator.vibrate(12)}catch(_){}
+  document.addEventListener('pointermove',dragMove,{passive:false});
+  document.addEventListener('pointerup',dragEnd);
+  document.addEventListener('pointercancel',dragEnd);
+}
+function dragMove(e){
+  if(!dragger)return;
+  e.preventDefault();
+  dragger.x=e.clientX; dragger.y=e.clientY;
+  updateDrop();
+  autoScroll();
+}
+function updateDrop(){
+  if(!dragger)return;
+  const {el,ph,dx,dy,x,y}=dragger;
+  el.style.left=(x-dx)+'px';
+  el.style.top=(y-dy)+'px';
+  el.style.visibility='hidden';
+  const under=document.elementFromPoint(x,y);
+  el.style.visibility='';
+  if(!under)return;
+  const over=under.closest('.pitem:not(.placeholder)');
+  if(over&&over!==ph){
+    const r=over.getBoundingClientRect();
+    over.parentNode.insertBefore(ph,(y<r.top+r.height/2)?over:over.nextSibling);
+    return;
+  }
+  const body=under.closest('.tier-body');
+  if(body&&!body.contains(ph))body.appendChild(ph);
+}
+/* the four groups are taller than a phone screen, so the page has to come to you */
+function autoScroll(){
+  if(!dragger)return;
+  const edge=110, navH=80;
+  const y=dragger.y;
+  dragger.dir = y<edge ? -1 : y>innerHeight-edge-navH ? 1 : 0;
+  if(dragger.dir&&!dragger.raf){
+    const step=()=>{
+      if(!dragger||!dragger.dir){if(dragger)dragger.raf=null;return}
+      const before=scrollY;
+      scrollBy(0,dragger.dir*11);
+      if(scrollY!==before)updateDrop();        // keep the drop target live while it moves
+      dragger.raf=requestAnimationFrame(step);
+    };
+    dragger.raf=requestAnimationFrame(step);
+  }
+}
+function dragEnd(){
+  if(!dragger)return;
+  const {el,ph}=dragger;
+  dragger.dir=0; if(dragger.raf)cancelAnimationFrame(dragger.raf);
+  document.removeEventListener('pointermove',dragMove);
+  document.removeEventListener('pointerup',dragEnd);
+  document.removeEventListener('pointercancel',dragEnd);
+  ph.parentNode.insertBefore(el,ph);
+  ph.remove();
+  el.classList.remove('lifted');
+  el.style.cssText='';
+  dragger=null;
+  commitOrder();
+}
+function commitOrder(){          // the DOM is the new truth: read it back into state
+  const order=[];
+  document.querySelectorAll('#plist .tier').forEach(sec=>{
+    const tier=sec.dataset.tier;
+    sec.querySelectorAll('.pitem:not(.placeholder)').forEach(el=>{
+      const p=P(el.dataset.id); if(p){p.tier=tier;order.push(p)}
+    });
+  });
+  if(order.length===S.players.length)S.players=order;
+  sortByTier();
+  render();
+}
+
+function playerSheet(id){
+  const p=P(id); if(!p)return;
+  modal(`<h3 style="margin-bottom:4px">${esc(p.name)}</h3>
+    <div class="muted" style="margin-bottom:16px">${TIERS.find(t=>t[0]===tierOf(p))[1]} \u00b7 rank ${S.players.indexOf(p)+1}</div>
+    <div class="mini" style="margin-bottom:7px">Move to</div>
+    <div class="tierpick">${TIERS.map(([k,l])=>
+      `<button class="${tierOf(p)===k?'on':''}" onclick="setTier('${id}','${k}')">${l}</button>`).join('')}</div>
+    <button class="btn full" style="margin-top:16px" onclick="closeModal();renamePlayer('${id}')">Rename</button>
+    <button class="btn dan full" style="margin-top:10px" onclick="closeModal();delPlayer('${id}')">Remove from session</button>
+    <button class="btn gho full" style="margin-top:10px" onclick="closeModal()">Close</button>`);
+}
+function setTier(id,t){const p=P(id);if(!p)return;p.tier=t;sortByTier();closeModal();render()}
 
 /* ---------------- history ------------------------------------------------ */
 function viewHistory(st){
@@ -1142,7 +1278,8 @@ function addPlayer(){
   let el=$('#newName');if(!el)return;
   const name=el.value.trim();if(!name)return;
   if(S.players.some(p=>p.name.toLowerCase()===name.toLowerCase())){toast('That name is already in the list',1);return}
-  S.players.push({id:uid(),name,addedRound:roundsDone()+1});
+  S.players.push({id:uid(),name,tier:'int',addedRound:roundsDone()+1});
+  sortByTier();
   el.value='';
   if(S.current&&!S.current.confirmed)S.current=null;
   render();el=$('#newName');if(el)el.focus();
@@ -1171,26 +1308,34 @@ function dropPlayer(id){
   if(S.current&&(S.current.resting.includes(id)||S.current.courts.some(c=>[...c.a,...c.b].includes(id))))S.current=null;
   render();
 }
-function movePlayer(i,d){
-  const j=i+d;if(j<0||j>=S.players.length)return;
-  const a=S.players;[a[i],a[j]]=[a[j],a[i]];render();
-}
-function reorder(from,to){
-  if(from===to)return;
-  const a=S.players,[m]=a.splice(from,1);a.splice(to,0,m);render();
-}
 function setCourts(d){S.settings.courts=clamp(S.settings.courts+d,1,12);render()}
+function clearLiveScores(){      // a half-entered round is meaningless under new rules
+  if(!S.current)return false;
+  let had=false;
+  S.current.courts.forEach(c=>{
+    if(c.winner||c.winScore!=null)had=true;
+    c.winner=null;c.winScore=null;c.loseScore=null;
+  });
+  return had;
+}
 function setMode(m){
   if(S.settings.mode===m)return;
   S.settings.mode=m;
+  const wiped=clearLiveScores();
   if(S.current&&!S.current.confirmed)S.current=null;
   render();
+  if(wiped){toast('Re-enter this round\u2019s scores \u2014 the rules changed',1);return}
   toast(m==='firstto'?`First to ${S.settings.total} — enter the loser's score`
                      :`Combined ${S.settings.total} — enter the winner's score`);
 }
 function setSetting(k,v){
+  const old=S.settings[k];
   S.settings[k]=v;
   if(k==='courts'&&S.current&&!S.current.confirmed)S.current=null;
+  if(k==='total'&&old!==v){
+    const wiped=clearLiveScores();
+    if(wiped){render();toast('Re-enter this round\u2019s scores \u2014 the target changed',1);return}
+  }
   render();
 }
 function startSession(){
@@ -1205,11 +1350,6 @@ function newSession(){
 function hardReset(){
   ask('Players, rounds and settings will all be erased from this device.','Reset everything',()=>{
     localStorage.removeItem(LS);S=defState();tab='game';sel=null;render()});
-}
-function loadDemo(){
-  ['Seag','Phil','Remy','Aurel','Sam','Nadia','Kayla','Oscar'].forEach(n=>{
-    if(!S.players.some(p=>p.name===n))S.players.push({id:uid(),name:n,addedRound:1})});
-  render();
 }
 
 /* ---- editing the suggested round ---- */
@@ -1242,14 +1382,6 @@ function swapPlayers(x,y){
   if(frozen(A)||frozen(B)){toast('That player is in a locked team',1);return}
   const put=(loc,id)=>{ if(loc.type==='rest')S.current.resting[loc.i]=id; else S.current.courts[loc.i][loc.side][loc.k]=id };
   put(A,y);put(B,x);
-}
-function toggleCourtLock(i){const c=S.current.courts[i];c.locked=!c.locked;render()}
-function toggleTeamLock(i,side){
-  const t=S.current.courts[i][side];
-  const on=!isLockedPair(t[0],t[1]);
-  setLock(t[0],t[1],on);
-  sel=null;render();
-  toast(on?`${nameOf(t[0])} + ${nameOf(t[1])} are locked together`:'Pair unlocked');
 }
 function unlockPair(i){const l=S.locks[i];if(!l)return;S.locks.splice(i,1);render();toast('Pair unlocked')}
 function regen(){
@@ -1298,8 +1430,7 @@ function finishRound(){
 /* ---- forced pairings ---- */
 function removePair(i){S.forced.pairs.splice(i,1);regen()}
 function pairDialog(){
-  const used=new Set();S.forced.pairs.forEach(p=>p.forEach(i=>used.add(i)));
-  if(S.forced.match)[...S.forced.match.a,...S.forced.match.b].forEach(i=>used.add(i));
+  const used=new Set();S.locks.forEach(l=>l.forEach(i=>used.add(i)));
   const av=S.players.filter(p=>!used.has(p.id));
   if(av.length<2){toast('Not enough free players',1);return}
   const o=av.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
@@ -1313,43 +1444,15 @@ function pairDialog(){
 function addPair(){
   const a=$('#fp1').value,b=$('#fp2').value;
   if(a===b){toast('Pick two different players',1);return}
-  S.forced.pairs.push([a,b]);closeModal();regen();
-  toast(`${nameOf(a)} + ${nameOf(b)} will play together`);
+  setLock(a,b,true);closeModal();regen();
+  toast(`${nameOf(a)} + ${nameOf(b)} are locked together`);
 }
-function matchDialog(){
-  const used=new Set();S.forced.pairs.forEach(p=>p.forEach(i=>used.add(i)));
-  const av=S.players.filter(p=>!used.has(p.id));
-  if(av.length<4){toast('Not enough free players',1);return}
-  const o=av.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
-  modal(`<h3 style="margin-bottom:14px">Force a matchup</h3>
-    <div class="mini" style="margin-bottom:6px">Team A</div>
-    <div class="grid2"><select id="m1">${o}</select><select id="m2">${o}</select></div>
-    <div class="vs"><span>VS</span></div>
-    <div class="mini" style="margin-bottom:6px">Team B</div>
-    <div class="grid2"><select id="m3">${o}</select><select id="m4">${o}</select></div>
-    <button class="btn pri full" style="margin-top:16px" onclick="addMatch()">Force matchup</button>
-    <button class="btn gho full" style="margin-top:10px" onclick="closeModal()">Cancel</button>`);
-  ['m2','m3','m4'].forEach((id,i)=>{const s=$('#'+id);if(s&&s.options.length>i+1)s.selectedIndex=i+1});
-}
-function addMatch(){
-  const ids=['m1','m2','m3','m4'].map(i=>$('#'+i).value);
-  if(new Set(ids).size<4){toast('Pick four different players',1);return}
-  S.forced.match={a:[ids[0],ids[1]],b:[ids[2],ids[3]]};
-  closeModal();regen();toast('Matchup forced');
-}
-
 /* ---- drag & drop + input wiring ---- */
 function wire(){
   const nn=$('#newName');
   if(nn)nn.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();addPlayer()}};
 
-  document.querySelectorAll('#setupList .pitem').forEach(el=>{
-    el.ondragstart=e=>{dragId=+el.dataset.i;el.classList.add('drag');e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain','x')}catch(_){}}
-    el.ondragend=()=>{el.classList.remove('drag');document.querySelectorAll('.over').forEach(x=>x.classList.remove('over'))};
-    el.ondragover=e=>{e.preventDefault();el.classList.add('over')};
-    el.ondragleave=()=>el.classList.remove('over');
-    el.ondrop=e=>{e.preventDefault();el.classList.remove('over');if(dragId!=null)reorder(dragId,+el.dataset.i);dragId=null};
-  });
+  wirePlayerDrag();
   document.querySelectorAll('[data-pid]').forEach(el=>{
     if(!el.getAttribute('draggable'))return;
     el.ondragstart=e=>{dragId=el.dataset.pid;e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain','x')}catch(_){}}
