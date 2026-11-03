@@ -56,10 +56,16 @@ JSON backup, and **Import session** to move a session to another device.
   group down. Expect closer-matched *opponents* but less even scorelines and far fewer different
   partners: a group of four only has six possible pairings.
 
-Players are grouped into **Advanced / Intermediate / Beginner / Newbie** — Advanced is strongest,
+Players are grouped into **Advanced / Upper Int. / Intermediate / Beginner** — Advanced is strongest,
 and it is entirely up to you how many go in each. Press and hold a name to drag it between groups
 or within one; the number beside it is their overall rank, which is what the matchmaker uses.
 Tap a name to rename them, move them, or take them out of the session.
+
+Each group has a colour — indigo, blue, cyan, amber — running strongest to weakest. It marks the
+stripe and rank badge in the list, and a dot beside every name on the Game screen, so you can see
+at a glance which groups are on a court and when Same level had to borrow. The ramp deliberately
+avoids green, red and the warning amber, which already mean good / danger / uneven elsewhere, and
+it has room for a fifth group above Advanced.
 
 The Players tab shows names and skill order only. Current strength, the partner matrix and the
 opponent matrix are still computed every round — they drive the matchmaking — they are simply

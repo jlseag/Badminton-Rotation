@@ -26,6 +26,8 @@
   --red:#E23B3B; --red-d:#B82A2A; --red-l:#FFECEC;
   --gold:#F2B705;
   --r:20px; --r-sm:14px; --tap:54px;
+  /* skill tiers: a hue ramp, deliberately clear of the green/red/amber the UI
+     already uses for good / danger / warning. Room for a 5th above Advanced. */
   --shadow:0 2px 0 var(--line2), 0 6px 18px rgba(15,36,25,.07);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -137,6 +139,18 @@ nav button.on{color:var(--court);background:rgba(14,138,79,.11)}
   display:flex;align-items:center;justify-content:center;color:var(--ink2);font-size:15px;font-weight:900}
 .ibtn.dan{color:var(--red);background:var(--red-l);border-color:#F3CECE}
 .handle{cursor:grab;color:var(--ink3);padding:0 2px;font-size:16px;letter-spacing:-2px}
+[data-tier=adv]{--tc:#4A33C8;--tcs:#ECE9FC;--tct:#3A2BA8;--tcf:#fff}
+[data-tier=upp]{--tc:#2878D0;--tcs:#E4EEFB;--tct:#1F5CA0;--tcf:#fff}
+[data-tier=int]{--tc:#0E9BC4;--tcs:#E0F3F9;--tct:#0A6E8C;--tcf:#fff}
+[data-tier=beg]{--tc:#E8A00B;--tcs:#FCF0D6;--tct:#8A5B00;--tcf:#3D2A00}
+.tier .tier-n{color:var(--tct)}
+.tier .tier-c{background:var(--tc);color:var(--tcf)}
+.tier .pitem{border-left:7px solid var(--tc)}
+.tier .pnum{background:var(--tcs);color:var(--tct)}
+.tier .pnum.s1{background:var(--tcs);color:var(--tct);box-shadow:0 0 0 2px var(--tc) inset}
+.tdot{width:11px;height:11px;border-radius:50%;flex:none;background:var(--tc);display:inline-block}
+.tierpick button[data-tier]{border-bottom-color:var(--tc)}
+.tierpick button[data-tier].on{background:var(--tc);color:var(--tcf);border-color:var(--tc)}
 .grip{margin-left:auto;color:var(--ink3);font-size:15px;letter-spacing:-3px;padding:0 4px;flex:none}
 #plist{display:flex;flex-direction:column;gap:16px}
 .tier-h{display:flex;align-items:center;gap:10px;margin:0 2px 9px}
@@ -350,7 +364,8 @@ function load(){
       S.settings=Object.assign(defState().settings,o.settings||{});
       S.forced=Object.assign({pairs:[],match:null},o.forced||{});
       S.locks=Array.isArray(o.locks)?o.locks.filter(x=>Array.isArray(x)&&x.length===2):[];
-      S.players.forEach(p=>{if(!TIERS.some(x=>x[0]===p.tier))p.tier='int'});
+      S.players.forEach(p=>{if(p.tier==='new')p.tier='beg';
+        if(!TIERS.some(x=>x[0]===p.tier))p.tier='int'});
       // sessions saved before scoring modes existed only stored the winner's score
       const T=S.settings.total;
       (S.rounds||[]).forEach(r=>(r.courts||[]).forEach(c=>{
@@ -363,8 +378,8 @@ const teamName=t=>t.map(nameOf).join(' + ');
 const pk=(a,b)=>a<b?a+'|'+b:b+'|'+a;
 /* skill tiers — Advanced is strongest. The players array stays the single skill
    order; tier just groups it, and sorting by tier keeps the two in step. */
-const TIERS=[['adv','Advanced'],['int','Intermediate'],['beg','Beginner'],['new','Newbie']];
-const TIER_SHORT={adv:'Adv',int:'Int',beg:'Beg',new:'New'};
+const TIERS=[['adv','Advanced'],['upp','Upper Int.'],['int','Intermediate'],['beg','Beginner']];
+const TIER_SHORT={adv:'Adv',upp:'Upper',int:'Int',beg:'Beg'};
 const TIER_I=t=>{const i=TIERS.findIndex(x=>x[0]===t);return i<0?1:i};
 const tierOf=p=>p&&TIERS.some(x=>x[0]===p.tier)?p.tier:'int';
 function sortByTier(){            // stable: order inside a tier is preserved
@@ -851,6 +866,7 @@ function viewGame(st){
     const s=st[id]||{pts:0,games:0};
     return `<button class="chip ${sel===id?'sel':''}" data-pid="${id}" ${draft&&!loc?'draggable="true"':''}
       onclick="${draft?(loc?`toast('This court is locked','1')`:`tapPlayer('${id}')`):'null'}">
+      <i class="tdot" data-tier="${tierOf(P(id))}"></i>
       <span>${esc(nameOf(id))}</span><span class="st">${s.pts} pts · ${s.games} ${s.games===1?'game':'games'}</span></button>`;
   };
   const teamBlock=(c,side,ci)=>{
@@ -878,7 +894,7 @@ function viewGame(st){
     <div class="row wrap" style="margin-top:8px">
       ${cur.resting.map(id=>`<button class="pill ${sel===id?'sel':''}" data-pid="${id}" ${draft?'draggable="true"':''}
         style="${sel===id?'border-color:var(--acc);background:rgba(61,220,132,.14)':''}"
-        onclick="${draft?`tapPlayer('${id}')`:'null'}">${esc(nameOf(id))}
+        onclick="${draft?`tapPlayer('${id}')`:'null'}"><i class="tdot" data-tier="${tierOf(P(id))}"></i>${esc(nameOf(id))}
         <span style="color:var(--ink3);font-size:11.5px;font-weight:800">${(st[id]||{}).games||0} ${((st[id]||{}).games||0)===1?'game':'games'}</span></button>`).join('')}
     </div>
   </div>`:'<div class="card tight"><span class="mini">Everyone plays this round</span></div>'}
@@ -1223,7 +1239,7 @@ function playerSheet(id){
     <div class="muted" style="margin-bottom:16px">${TIERS.find(t=>t[0]===tierOf(p))[1]} \u00b7 rank ${S.players.indexOf(p)+1}</div>
     <div class="mini" style="margin-bottom:7px">Move to</div>
     <div class="tierpick">${TIERS.map(([k,l])=>
-      `<button class="${tierOf(p)===k?'on':''}" onclick="setTier('${id}','${k}')">${l}</button>`).join('')}</div>
+      `<button data-tier="${k}" class="${tierOf(p)===k?'on':''}" onclick="setTier('${id}','${k}')">${l}</button>`).join('')}</div>
     <button class="btn full" style="margin-top:16px" onclick="closeModal();renamePlayer('${id}')">Rename</button>
     <button class="btn dan full" style="margin-top:10px" onclick="closeModal();delPlayer('${id}')">Remove from session</button>
     <button class="btn gho full" style="margin-top:10px" onclick="closeModal()">Close</button>`);
