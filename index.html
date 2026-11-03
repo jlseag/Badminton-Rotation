@@ -151,7 +151,11 @@ nav button.on{color:var(--court);background:rgba(14,138,79,.11)}
 .tdot{width:11px;height:11px;border-radius:50%;flex:none;background:var(--tc);display:inline-block}
 .tierpick button[data-tier]{border-bottom-color:var(--tc)}
 .tierpick button[data-tier].on{background:var(--tc);color:var(--tcf);border-color:var(--tc)}
-.grip{margin-left:auto;color:var(--ink3);font-size:15px;letter-spacing:-3px;padding:0 4px;flex:none}
+.grip{margin-left:auto;flex:none;width:46px;height:46px;margin-right:-6px;display:flex;
+  align-items:center;justify-content:center;color:var(--ink3);border-radius:12px;
+  touch-action:none;cursor:grab}
+.grip:active{background:var(--ground);cursor:grabbing}
+.grip svg{width:22px;height:22px;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;fill:none}
 #plist{display:flex;flex-direction:column;gap:16px}
 .tier-h{display:flex;align-items:center;gap:10px;margin:0 2px 9px}
 .tier-n{font-family:Fredoka,sans-serif;font-size:20px;font-weight:600;color:var(--court-d);letter-spacing:-.3px}
@@ -161,7 +165,8 @@ nav button.on{color:var(--court);background:rgba(14,138,79,.11)}
 .tier-body{display:flex;flex-direction:column;gap:9px;min-height:54px}
 .tier-empty{border:2px dashed var(--line2);border-radius:var(--r-sm);padding:14px;text-align:center;
   color:var(--ink3);font-size:13px;font-weight:700}
-.pitem{touch-action:manipulation;user-select:none;-webkit-user-select:none}
+.pitem{touch-action:pan-y;user-select:none;-webkit-user-select:none;
+  -webkit-touch-callout:none}   /* pan-y keeps the list scrollable; the grip blocks panning */
 .pitem.lifted{position:fixed;z-index:300;pointer-events:none;margin:0;
   box-shadow:0 14px 30px rgba(15,36,25,.28);transform:scale(1.03);border-color:var(--court)}
 .pitem.placeholder{background:rgba(14,138,79,.09);border:2px dashed var(--court);box-shadow:none}
@@ -819,8 +824,8 @@ function viewSetup(){
   </div>
 
   <div class="sec-h">Players (${n})</div>
-  ${n?`<div class="muted" style="margin:-4px 4px 12px">Advanced is strongest. <b>Press and hold</b> a name to drag it between groups.
-      Tap a name to rename or remove.</div>${tierList()}`
+  ${n?`<div class="muted" style="margin:-4px 4px 12px">Advanced is strongest. Drag the <b>\u2261 handle</b> to move someone between groups.
+      Tap a name to rename, re-group or remove.</div>${tierList()}`
    :`<div class="card"><div class="empty"><span class="ic">\u{1F3F8}</span><b>No players yet</b>Add everyone, then sort them into groups</div></div>`}
 
   <div class="sec-h">Courts</div>
@@ -1108,7 +1113,8 @@ function tierList(){
           return `<div class="pitem" data-id="${p.id}">
             <span class="pnum ${n===1?'s1':''}">${n}</span>
             <span class="pname">${esc(p.name)}</span>
-            <span class="grip">\u22ee\u22ee</span>
+            <span class="grip" aria-label="Drag to reorder"><svg viewBox="0 0 24 24">
+              <path d="M5 9h14M5 15h14"/></svg></span>
           </div>`;
         }).join(''):'<div class="tier-empty">Drag someone here</div>'}
       </div>
@@ -1125,8 +1131,8 @@ function viewPlayers(st){
     <div class="muted" style="margin-top:8px">New players join as Intermediate on 0 points, and get priority for playing time.</div>
   </div>
   <div class="sec-h">Skill order</div>
-  <div class="muted" style="margin:-4px 4px 12px">Advanced is strongest. <b>Press and hold</b> a name to drag it \u2014 between groups or within one.
-    Tap a name to rename or remove. The number is their overall rank.</div>
+  <div class="muted" style="margin:-4px 4px 12px">Advanced is strongest. Drag the <b>\u2261 handle</b> to move someone \u2014 between groups or within one.
+    Tap a name to rename, re-group or remove. The number is their overall rank.</div>
   ${tierList()}`;
 }
 
@@ -1137,10 +1143,19 @@ function wirePlayerDrag(){
   list.querySelectorAll('.pitem').forEach(el=>{
     el.addEventListener('pointerdown',pdDown);
     el.addEventListener('contextmenu',e=>e.preventDefault());
+    const grip=el.querySelector('.grip');
+    if(grip)grip.addEventListener('pointerdown',e=>{
+      // the handle is touch-action:none, so the browser never steals this gesture
+      if(e.button!==undefined&&e.button>0)return;
+      e.preventDefault(); e.stopPropagation();
+      try{grip.setPointerCapture(e.pointerId)}catch(_){}
+      startDrag(el,e.clientX,e.clientY,e.pointerId);
+    });
   });
 }
 function pdDown(e){
   if(e.button!==undefined&&e.button>0)return;
+  if(e.target.closest('.grip'))return;
   const el=e.currentTarget, sx=e.clientX, sy=e.clientY;
   let moved=false;
   const timer=setTimeout(()=>{if(!moved)startDrag(el,sx,sy,e.pointerId)},300);
@@ -1167,7 +1182,9 @@ function startDrag(el,sx,sy,pid){
   document.addEventListener('pointermove',dragMove,{passive:false});
   document.addEventListener('pointerup',dragEnd);
   document.addEventListener('pointercancel',dragEnd);
+  document.addEventListener('touchmove',blockScroll,{passive:false});
 }
+function blockScroll(e){if(dragger)e.preventDefault()}
 function dragMove(e){
   if(!dragger)return;
   e.preventDefault();
@@ -1217,6 +1234,7 @@ function dragEnd(){
   document.removeEventListener('pointermove',dragMove);
   document.removeEventListener('pointerup',dragEnd);
   document.removeEventListener('pointercancel',dragEnd);
+  document.removeEventListener('touchmove',blockScroll);
   ph.parentNode.insertBefore(el,ph);
   ph.remove();
   el.classList.remove('lifted');

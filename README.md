@@ -62,9 +62,13 @@ JSON backup, and **Import session** to move a session to another device.
   levels, so a stronger player gets a weaker partner.
 
 Players are grouped into **Advanced / Upper Int. / Intermediate / Beginner** — Advanced is strongest,
-and it is entirely up to you how many go in each. Press and hold a name to drag it between groups
-or within one; the number beside it is their overall rank, which is what the matchmaker uses.
-Tap a name to rename them, move them, or take them out of the session.
+and it is entirely up to you how many go in each. Drag the ≡ handle on the right of a row to move
+someone between groups or within one; the number beside it is their overall rank, which is what
+the matchmaker uses. Tap a name to rename them, move them, or take them out of the session.
+
+The handle exists because of `touch-action`: a row is `pan-y` so the list still scrolls under your
+finger, while the handle is `touch-action: none` so the browser cannot steal the gesture for
+scrolling. Dragging the row body itself only works with a mouse.
 
 Each group has a colour — indigo, blue, cyan, amber — running strongest to weakest. It marks the
 stripe and rank badge in the list, and a dot beside every name on the Game screen, so you can see
