@@ -14,8 +14,13 @@ at a court with no signal.
 
 **Local:** `index.html` also runs straight off the filesystem — no server, no build, no internet.
 
-Deployed from `main` (root) via GitHub Pages. Push to `main` and the site updates; bump `V` in
-`sw.js` when you change files so installed phones pick the new version up.
+Deployed from `main` (root) via GitHub Pages. Push to `main` and the site updates.
+
+The installed app keeps itself current: on every launch it checks for a new service worker
+(registered with `updateViaCache: 'none'`, and re-checked hourly while open), and reloads once
+the new one takes over. Page requests use `cache: 'reload'` so "network first" really reaches the
+network — GitHub Pages serves `max-age=600`, which would otherwise let a plain fetch hand back a
+stale copy. Bump `V` in `sw.js` whenever you change a file so the swap is triggered.
 
 Everything is stored in that browser's `localStorage` on that device — the hosted page and a
 local copy each keep their own separate session. Nothing is uploaded, and there is no import

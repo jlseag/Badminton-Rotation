@@ -1568,7 +1568,20 @@ load();render();
 
 // installed / offline support (no-op when opened straight off the filesystem)
 if('serviceWorker' in navigator && location.protocol.startsWith('http')){
-  addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}));
+  addEventListener('load',async()=>{
+    // an installed app resumes rather than relaunches, so it would otherwise sit on
+    // an old build forever. Check for a new one every launch and swap to it.
+    const had=!!navigator.serviceWorker.controller;
+    let reloading=false;
+    navigator.serviceWorker.addEventListener('controllerchange',()=>{
+      if(had&&!reloading){reloading=true;location.reload()}
+    });
+    try{
+      const reg=await navigator.serviceWorker.register('sw.js',{updateViaCache:'none'});
+      reg.update();
+      setInterval(()=>reg.update(),60*60*1000);
+    }catch(_){}
+  });
 }
 </script>
 </body>
