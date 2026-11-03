@@ -339,7 +339,7 @@ tr.rest td:nth-child(2)::after{content:"RESTING";font-size:9px;font-weight:900;c
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v17';   // bump together with V in sw.js
+const BUILD='v18';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -363,8 +363,8 @@ let S=defState(), tab='game', sel=null, dragId=null, editRound=null;
 
 function save(){try{localStorage.setItem(LS,JSON.stringify(S))}catch(e){}}
 function load(){
-  try{const r=localStorage.getItem(LS); if(!r)return;
-    const o=JSON.parse(r); if(o&&o.v===1){S=Object.assign(defState(),o);
+  try{const r=localStorage.getItem(LS);
+    const o=r?JSON.parse(r):null; if(o&&o.v===1){S=Object.assign(defState(),o);
       S.settings=Object.assign(defState().settings,o.settings||{});
       if(o.settings){                       // pre-existing session: don't change its rules
         if(o.settings.mode===undefined)S.settings.mode='combined';
@@ -379,6 +379,7 @@ function load(){
       (S.rounds||[]).forEach(r=>(r.courts||[]).forEach(c=>{
         if(c.loseScore==null&&c.winScore!=null)c.loseScore=T-c.winScore;}));}
   }catch(e){}
+  if(!S.started)tab='players';          // nothing set up yet: start on the roster
 }
 const P=id=>S.players.find(p=>p.id===id);
 const nameOf=id=>{const p=P(id);return p?p.name:'?'};
@@ -789,71 +790,60 @@ function render(){
   const nav=$('#nav');
   nav.innerHTML=TABS.map(([k,l,i])=>
     `<button class="${tab===k?'on':''}" onclick="go('${k}')"><svg viewBox="0 0 24 24">${ICONS[i]}</svg>${l}</button>`).join('');
-  nav.classList.toggle('hide',!S.started);
   const st=stats();
-  $('#hTitle').textContent = !S.started?'New Session' : tab==='game'?(S.ended?'Final Score':(S.current?'Round '+S.current.n:'Session')):
-      TABS.find(t=>t[0]===tab)[1];
-  $('#hSub').textContent = !S.started?'Enter players in skill order'
-      : `${S.players.length} players · ${activeCourts()||'no'} court${activeCourts()===1?'':'s'} · ${roundsDone()} round${roundsDone()===1?'':'s'} played`;
-  $('#hRight').innerHTML = S.started&&tab!=='settings'
-      ? `<span class="tag ${isCompetitive()?'r':'b'}">${isCompetitive()?'Competitive':'Warm-up'}</span>`:'';
   const app=$('#app');
-  app.innerHTML = !S.started ? viewSetup()
-    : tab==='game' ? viewGame(st)
+  app.innerHTML = tab==='game' ? viewGame(st)
     : tab==='board' ? viewBoard(st)
     : tab==='players' ? viewPlayers(st)
     : tab==='history' ? viewHistory(st)
     : viewSettings();
+  // after the body renders, so a round generated during render shows in the title
+  $('#hTitle').textContent = tab!=='game' ? TABS.find(t=>t[0]===tab)[1]
+      : !S.started ? 'New Session'
+      : S.ended ? 'Final Score'
+      : S.current ? 'Round '+S.current.n : 'Session';
+  $('#hSub').textContent =
+      `${S.players.length} player${S.players.length===1?'':'s'} · ${activeCourts()||'no'} court${activeCourts()===1?'':'s'} · ${roundsDone()} round${roundsDone()===1?'':'s'} played`;
+  $('#hRight').innerHTML = S.started&&tab!=='settings'
+      ? `<span class="tag ${isCompetitive()?'r':'b'}">${isCompetitive()?'Competitive':'Warm-up'}</span>`:'';
   wire();
   save();
 }
 function go(t){tab=t;sel=null;window.scrollTo(0,0);render()}
 
-/* ---------------- setup -------------------------------------------------- */
-function viewSetup(){
+/* ---------------- start panel (Game tab, before a session) --------------- */
+function viewStart(){
   const n=S.players.length, c=S.settings.courts, ac=activeCourts(), playing=ac*4;
+  if(!n)return `<div class="card"><div class="empty"><span class="ic">\u{1F3F8}</span>
+      <b>Add your players first</b>Put everyone in, then sort them into skill groups.</div></div>
+    <button class="btn pri full" onclick="go('players')">Go to Players</button>`;
   return `
   <div class="card">
-    <div class="row" style="margin-bottom:10px">
-      <input id="newName" placeholder="Player name" autocomplete="off" enterkeyhint="done">
-      <button class="btn pri" style="flex:none;padding:0 20px" onclick="addPlayer()">Add</button>
-    </div>
-    <div class="muted">Enter players from <b style="color:var(--acc)">strongest to weakest</b>. This order is their
-      Initial Skill Rank and is used to balance the first rounds.</div>
-  </div>
-
-  <div class="sec-h">Players (${n})</div>
-  ${n?`<div class="muted" style="margin:-4px 4px 12px">Advanced is strongest. Drag the <b>\u2261 handle</b> to move someone between groups.
-      Tap a name to rename, re-group or remove.</div>${tierList()}`
-   :`<div class="card"><div class="empty"><span class="ic">\u{1F3F8}</span><b>No players yet</b>Add everyone, then sort them into groups</div></div>`}
-
-  <div class="sec-h">Courts</div>
-  <div class="card">
-    <div class="row">
-      <button class="btn" style="flex:none;width:56px" onclick="setCourts(-1)">−</button>
-      <div style="flex:1;text-align:center">
-        <div style="font-size:34px;font-weight:900;line-height:1">${c}</div>
-        <div class="mini">Courts available</div>
-      </div>
-      <button class="btn" style="flex:none;width:56px" onclick="setCourts(1)">+</button>
-    </div>
-    <div class="row" style="margin-top:12px;justify-content:space-around;text-align:center">
-      <div><div style="font-weight:800;font-size:18px">${playing}</div><div class="mini">Playing</div></div>
-      <div><div style="font-weight:800;font-size:18px;color:${n-playing>0?'var(--warn)':'var(--dim2)'}">${Math.max(0,n-playing)}</div><div class="mini">Resting</div></div>
-      <div><div style="font-weight:800;font-size:18px">${ac}</div><div class="mini">Courts in use</div></div>
+    <div class="row" style="justify-content:space-around;text-align:center">
+      <div><div style="font-family:Fredoka,sans-serif;font-weight:600;font-size:24px">${playing}</div><div class="mini">Playing</div></div>
+      <div><div style="font-family:Fredoka,sans-serif;font-weight:600;font-size:24px;color:${n-playing>0?'#C8820A':'var(--ink3)'}">${Math.max(0,n-playing)}</div><div class="mini">Resting</div></div>
+      <div><div style="font-family:Fredoka,sans-serif;font-weight:600;font-size:24px">${ac}</div><div class="mini">Courts in use</div></div>
     </div>
   </div>
-  ${!n?''
-   : n<4 ? `<div class="note">A doubles court needs 4 players — ${4-n} more and you can play. You can still start now and add people as they turn up.</div>`
-   : ac<c ? `<div class="note">${n} players fills <b>${ac} court${ac>1?'s':''}</b>${n-playing?` with ${n-playing} resting each round`:''}. Courts is a maximum — the app only uses what you can fill.</div>`
-   : ''}
-  <button class="btn pri full" style="margin-top:6px" onclick="startSession()" ${n?'':'disabled'}>Start Session</button>
-  ${localStorage.getItem(LS)?`<button class="btn dan full" style="margin-top:10px" onclick="hardReset()">Reset all saved data</button>`:''}
-  `;
+  ${n<4 ? `<div class="note">A doubles court needs 4 players \u2014 ${4-n} more and you can play.</div>`
+   : ac<c ? `<div class="note">${n} players fills <b>${ac} court${ac>1?'s':''}</b>${n-playing?` with ${n-playing} resting each round`:''}.
+             Courts is a maximum \u2014 the app only uses what you can fill.</div>` : ''}
+  <div class="card tight">
+    <div class="row"><span class="mini">Scoring</span><span class="sp"></span>
+      <span style="font-weight:800;font-size:14px">${modeName()}</span></div>
+    <div class="row" style="margin-top:8px"><span class="mini">Match style</span><span class="sp"></span>
+      <span style="font-weight:800;font-size:14px">${S.settings.pairing==='level'?'Same level':'Social mix'}</span></div>
+  </div>
+  <button class="btn pri full" style="margin-top:4px" onclick="startSession()">Start Session</button>
+  <div class="grid2" style="margin-top:11px">
+    <button class="btn" onclick="go('players')">Edit players</button>
+    <button class="btn" onclick="go('settings')">Settings</button>
+  </div>`;
 }
 
 /* ---------------- game --------------------------------------------------- */
 function viewGame(st){
+  if(!S.started)return viewStart();
   if(S.ended)return viewFinal(st);
   if(activeCourts()<1){
     const n=S.players.length;
