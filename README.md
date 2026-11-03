@@ -18,7 +18,8 @@ Deployed from `main` (root) via GitHub Pages. Push to `main` and the site update
 `sw.js` when you change files so installed phones pick the new version up.
 
 Everything is stored in that browser's `localStorage` on that device — the hosted page and a
-local copy each keep their own separate session. Closing the tab, locking
+local copy each keep their own separate session. Nothing is uploaded, and there is no import
+or export: the app neither reads nor writes files. Closing the tab, locking
 the phone or losing signal will not lose the session. Use **Settings → Export session** to save a
 JSON backup, and **Import session** to move a session to another device.
 
@@ -47,6 +48,10 @@ JSON backup, and **Import session** to move a session to another device.
 
    Either mode takes any total: presets for 15 / 21 / 25 / 30, or set your own. Each finished
    round stores both scores, so changing mode later never rewrites what you already played.
+
+The Players tab shows names and skill order only. Current strength, the partner matrix and the
+opponent matrix are still computed every round — they drive the matchmaking — they are simply
+not displayed.
 7. **Finish Round** — points, games played, rests, partner and opponent history all update,
    and the next round is suggested automatically.
 8. **End game** — stop whenever you like and get the final score: champion, podium and the full

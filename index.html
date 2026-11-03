@@ -891,10 +891,7 @@ function viewFinal(st){
     ${row('Different partnerships','',`${Object.keys(pc).length} pairs, ${Object.values(pc).filter(v=>v>1).length} repeated`)}
   </div>
   <button class="btn pri full" style="margin-top:4px" onclick="resumeGame()">↩︎ Keep playing</button>
-  <div class="grid2" style="margin-top:11px">
-    <button class="btn" onclick="exportData()">Save a copy</button>
-    <button class="btn dan" onclick="newSession()">New session</button>
-  </div>`;
+  <button class="btn dan full" style="margin-top:11px" onclick="newSession()">New session</button>`;
 }
 
 function scoreUI(c,i){
@@ -1023,42 +1020,15 @@ function viewPlayers(st){
     <div class="muted" style="margin-top:8px">New players start on 0 points / 0 games and get priority for playing time.
       Drag them to the right skill position below.</div>
   </div>
-  <div class="sec-h">Skill order &amp; session record</div>
-  <div class="plist" id="setupList">${S.players.map((p,i)=>{const s=st[p.id];return `
+  <div class="sec-h">Skill order</div>
+  <div class="plist" id="setupList">${S.players.map((p,i)=>`
     <div class="pitem" draggable="true" data-i="${i}">
       <span class="handle">≡</span><span class="pnum ${i===0?'s1':''}">${i+1}</span>
-      <span class="pname" onclick="renamePlayer('${p.id}')">${esc(p.name)}
-        <small style="display:block;color:var(--dim2);font-weight:600;font-size:11px">${s.pts} pts · ${s.games} games · ${s.rests} rests · ${s.wins}W ${s.losses}L</small></span>
+      <span class="pname" onclick="renamePlayer('${p.id}')">${esc(p.name)}</span>
       <button class="ibtn" onclick="movePlayer(${i},-1)" ${i===0?'disabled style="opacity:.25"':''}>↑</button>
       <button class="ibtn" onclick="movePlayer(${i},1)" ${i===n-1?'disabled style="opacity:.25"':''}>↓</button>
       <button class="ibtn dan" onclick="delPlayer('${p.id}')">×</button>
-    </div>`}).join('')}</div>
-  <div class="sec-h">Current strength (internal)</div>
-  <div class="card">
-    ${(()=>{const str=strengths(st);return S.players.slice().sort((a,b)=>str[b.id]-str[a.id]).map(p=>{
-      const v=Math.round(str[p.id]);
-      return `<div class="row" style="padding:6px 0"><span style="width:90px;font-weight:700;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.name)}</span>
-      <span class="balbar" style="flex:1;height:8px"><i style="width:${v}%;background:linear-gradient(90deg,var(--acc-d),var(--acc))"></i></span>
-      <span class="mini" style="width:26px;text-align:right">${v}</span></div>`}).join('')})()}
-    <div class="muted" style="margin-top:8px">Blend of Initial Skill Rank and real performance — shifts toward performance as rounds are played.</div>
-  </div>
-  <div class="sec-h">Partner matrix</div>
-  <div class="card matrix">${matrixTable(st,'partners',2,3)}
-    <div class="muted" style="margin-top:8px">How many times each pair has partnered. <span style="color:var(--warn)">Amber</span> = twice, <span style="color:var(--bad)">red</span> = three or more.</div></div>
-  <div class="sec-h">Opponent matrix</div>
-  <div class="card matrix">${matrixTable(st,'opps',3,5)}
-    <div class="muted" style="margin-top:8px">How often each pair has faced each other.</div></div>`;
-}
-function matrixTable(st,key,warn,bad){
-  if(!S.players.length)return '<div class="muted">No players</div>';
-  const ps=S.players;
-  const sh=nm=>nm.length>6?nm.slice(0,6):nm;
-  return `<table><thead><tr><th style="text-align:left">&nbsp;</th>${ps.map(p=>`<th style="text-align:center">${esc(sh(p.name))}</th>`).join('')}</tr></thead><tbody>
-  ${ps.map(a=>`<tr><td style="font-weight:700;white-space:nowrap">${esc(sh(a.name))}</td>${ps.map(b=>{
-    if(a.id===b.id)return '<td style="color:var(--line)">•</td>';
-    const c=st[a.id][key][b.id]||0;
-    return `<td class="${c>=bad?'c2':c>=warn?'c1':''}">${c||'·'}</td>`;
-  }).join('')}</tr>`).join('')}</tbody></table>`;
+    </div>`).join('')}</div>`;
 }
 
 /* ---------------- history ------------------------------------------------ */
@@ -1120,8 +1090,8 @@ function viewSettings(){
   <div class="card">
     <div class="sl"><span class="lab">Courts available<small>A maximum — rounds only use what your players can fill (4 each)</small></span>
       <input type="number" min="1" max="12" value="${s.courts}" onchange="setSetting('courts',clamp(+this.value||1,1,12))"></div>
-    <div class="sl"><span class="lab">Warm-up rounds<small>Rounds before competitive mode</small></span>
-      <input type="number" min="0" max="20" value="${s.earlyRounds}" onchange="setSetting('earlyRounds',clamp(+this.value||0,0,20))"></div>
+    <button class="btn dan full" style="margin-top:14px" onclick="newSession()">Start a new session</button>
+    <button class="btn dan full" style="margin-top:10px" onclick="hardReset()">Reset everything</button>
   </div>
   <div class="sec-h">Scoring</div>
   <div class="card">
@@ -1163,14 +1133,6 @@ function viewSettings(){
     <div class="sl"><span class="lab">Admin score override<small>Allow scores outside ${scoreRange()[0]}–${scoreRange()[1]}</small></span>
       <div class="seg" style="width:130px"><button class="${s.allowOverride?'on':''}" onclick="setSetting('allowOverride',true)">On</button>
       <button class="${!s.allowOverride?'on':''}" onclick="setSetting('allowOverride',false)">Off</button></div></div>
-  </div>
-  <div class="sec-h">Data</div>
-  <div class="card">
-    <button class="btn full" onclick="exportData()">Export session (JSON)</button>
-    <button class="btn full" style="margin-top:10px" onclick="document.getElementById('impFile').click()">Import session</button>
-    <input type="file" id="impFile" accept="application/json" class="hide" onchange="importData(this)">
-    <button class="btn dan full" style="margin-top:10px" onclick="newSession()">Start a new session</button>
-    <button class="btn dan full" style="margin-top:10px" onclick="hardReset()">Reset all session data</button>
   </div>
   <div class="muted" style="text-align:center;padding:8px 0 20px">Everything is stored on this device only.</div>`;
 }
@@ -1374,42 +1336,6 @@ function addMatch(){
   if(new Set(ids).size<4){toast('Pick four different players',1);return}
   S.forced.match={a:[ids[0],ids[1]],b:[ids[2],ids[3]]};
   closeModal();regen();toast('Matchup forced');
-}
-
-/* ---- import / export ---- */
-async function exportData(){
-  const json=JSON.stringify(S,null,2), name='badminton-session.json';
-  try{
-    // hosted build: the viewer confirms the save; local build falls through
-    const dl=(window.claude&&window.claude.use)?await window.claude.use('downloads'):null;
-    if(dl){await dl.save({filename:name,data:json});toast('Session saved');return}
-  }catch(e){
-    const code=e&&e.code;
-    if(code==='declined')return;
-    if(code==='rate_limited'){toast('Try that again in a moment',1);return}
-    if(code&&code!=='unavailable'){toast('Could not save the file',1);return}
-  }
-  const url=URL.createObjectURL(new Blob([json],{type:'application/json'}));
-  const a=document.createElement('a');
-  a.href=url;a.download=name;
-  document.body.appendChild(a);a.click();a.remove();
-  setTimeout(()=>URL.revokeObjectURL(url),2000);
-}
-function importData(input){
-  const f=input.files&&input.files[0];if(!f)return;
-  const r=new FileReader();
-  r.onload=()=>{
-    try{
-      const o=JSON.parse(r.result);
-      if(!o||o.v!==1||!Array.isArray(o.players))throw 0;
-      S=Object.assign(defState(),o);
-      S.settings=Object.assign(defState().settings,o.settings||{});
-      S.forced=Object.assign({pairs:[],match:null},o.forced||{});
-      S.locks=Array.isArray(o.locks)?o.locks:[];
-      tab='game';render();toast('Session imported');
-    }catch(e){toast('That file is not a valid session',1)}
-  };
-  r.readAsText(f);input.value='';
 }
 
 /* ---- drag & drop + input wiring ---- */

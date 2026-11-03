@@ -1,5 +1,5 @@
 /* Offline cache — the courts usually have worse signal than the car park. */
-const V = 'badminton-v7';
+const V = 'badminton-v8';
 const ASSETS = ['./', './index.html', './manifest.json', './icon.png'];
 
 self.addEventListener('install', e => {
