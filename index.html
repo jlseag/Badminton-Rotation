@@ -416,7 +416,7 @@ tr.rest td:nth-child(2)::after{content:"RESTING";font-size:9px;font-weight:900;c
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v21';   // bump together with V in sw.js
+const BUILD='v22';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -1714,16 +1714,32 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
     }
     return d;
   }
-  function deviceLabel(){
+  async function deviceLabel(){
     const u = navigator.userAgent;
-    const os = /iPhone/.test(u) ? 'iPhone' : /iPad/.test(u) ? 'iPad'
-             : /Android/.test(u) ? 'Android' : /Mac OS X/.test(u) ? 'Mac'
-             : /Windows/.test(u) ? 'Windows' : 'Other';
-    const br = /CriOS|Chrome/.test(u) ? 'Chrome' : /FxiOS|Firefox/.test(u) ? 'Firefox'
-             : /Edg/.test(u) ? 'Edge' : /Safari/.test(u) ? 'Safari' : '';
+    let os = /iPhone/.test(u) ? 'iPhone' : /iPad/.test(u) ? 'iPad'
+           : /Android/.test(u) ? 'Android' : /Mac OS X/.test(u) ? 'Mac'
+           : /Windows/.test(u) ? 'Windows' : 'Other';
+    const br = /CriOS/.test(u) ? 'Chrome' : /FxiOS|Firefox/.test(u) ? 'Firefox'
+             : /Edg/.test(u) ? 'Edge' : /Chrome/.test(u) ? 'Chrome'
+             : /Safari/.test(u) ? 'Safari' : '';
+    let model = '';
+
+    // Client Hints give the real hardware model -- but only on Android.
+    // Apple reports every iPhone as 'iPhone' on purpose, so there is nothing
+    // to ask for there and no amount of sniffing will produce it.
+    try{
+      const uad = navigator.userAgentData;
+      if(uad && uad.getHighEntropyValues){
+        const h = await uad.getHighEntropyValues(['platform','platformVersion','model']);
+        if(h.platform) os = h.platform;
+        if(h.platformVersion) os += ' ' + String(h.platformVersion).split('.')[0];
+        if(h.model) model = h.model;
+      }
+    }catch(_){}
+
     const standalone = window.matchMedia &&
       matchMedia('(display-mode: standalone)').matches ? ' · installed' : '';
-    return (os + (br ? ' · '+br : '') + standalone);
+    return (model ? model + ' · ' : '') + os + (br ? ' · '+br : '') + standalone;
   }
 
   /* ── network helpers ──────────────────────────────────────────────── */
@@ -1805,7 +1821,7 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
         method:'POST',
         headers:{ Prefer:'resolution=merge-duplicates' },
         body: JSON.stringify({ host_id:A.id, device_key:deviceKey(),
-                               label:deviceLabel(), last_seen:now })
+                               label:(await deviceLabel()), last_seen:now })
       });
       await sbFetch('/rest/v1/hosts?id=eq.'+A.id, {
         method:'PATCH', body: JSON.stringify({ last_seen_at: now }) });
