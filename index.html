@@ -346,6 +346,12 @@ tr.rest td:nth-child(2)::after{content:"RESTING";font-size:9px;font-weight:900;c
   border:2px solid var(--line);border-radius:var(--r-sm);background:var(--white);
   color:var(--ink);min-height:var(--tap)}
 .gfield input:focus{outline:none;border-color:var(--court)}
+.gpwwrap{position:relative}
+.gpwwrap input{padding-right:74px}
+#gEye{position:absolute;right:8px;top:50%;transform:translateY(-50%);
+  background:var(--ground);border:none;color:var(--ink2);font:inherit;font-size:12px;
+  font-weight:800;letter-spacing:.05em;padding:9px 11px;border-radius:9px;cursor:pointer}
+#gEye:active{background:var(--line)}
 #gBtn{width:100%;font:inherit;font-size:16px;font-weight:800;color:#fff;
   background:var(--court);border:none;border-radius:var(--r-sm);
   min-height:var(--tap);margin-top:7px;cursor:pointer;
@@ -386,7 +392,10 @@ tr.rest td:nth-child(2)::after{content:"RESTING";font-size:9px;font-weight:900;c
           <input id="gEmail" type="email" autocomplete="username"
                  autocapitalize="off" autocorrect="off" required></div>
         <div class="gfield"><label for="gPass">Password</label>
-          <input id="gPass" type="password" autocomplete="current-password" required></div>
+          <div class="gpwwrap">
+            <input id="gPass" type="password" autocomplete="current-password" required>
+            <button type="button" id="gEye">SHOW</button>
+          </div></div>
         <button id="gBtn" type="submit">Sign in</button>
       </form>
       <p class="gnote">Accounts are issued by the organiser.<br>Contact them if you need access.</p>
@@ -416,7 +425,7 @@ tr.rest td:nth-child(2)::after{content:"RESTING";font-size:9px;font-weight:900;c
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v22';   // bump together with V in sw.js
+const BUILD='v23';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -1878,6 +1887,12 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
   /* ── sign in ──────────────────────────────────────────────────────── */
   function wireForm(){
     const f = $g('#gForm'); if(!f) return;
+    const eye = $g('#gEye'), pwf = $g('#gPass');
+    if(eye && pwf) eye.onclick = () => {
+      const hidden = pwf.type === 'password';
+      pwf.type = hidden ? 'text' : 'password';
+      eye.textContent = hidden ? 'HIDE' : 'SHOW';
+    };
     f.onsubmit = async e => {
       e.preventDefault();
       const btn = $g('#gBtn'), em = $g('#gEmail').value.trim(), pw = $g('#gPass').value;
