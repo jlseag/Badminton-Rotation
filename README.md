@@ -13,6 +13,8 @@ with its own icon, and a service worker caches everything on first load, so it k
 at a court with no signal.
 
 **Local:** `index.html` also runs straight off the filesystem — no server, no build, no internet.
+The typefaces are embedded in the file as base64 woff2 (Fredoka 600, Nunito variable 600–900, Latin
+subset), so the app makes **no external requests at all** and renders correctly offline indefinitely.
 
 Deployed from `main` (root) via GitHub Pages. Push to `main` and the site updates.
 
