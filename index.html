@@ -321,9 +321,79 @@ tr.rest td:nth-child(2)::after{content:"RESTING";font-size:9px;font-weight:900;c
 .empty b{display:block;color:var(--ink);font-family:Fredoka,sans-serif;font-size:18px;font-weight:600;margin-bottom:7px}
 .empty .ic{font-size:40px;display:block;margin-bottom:10px}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
+/* ══ access gate ═══════════════════════════════════════════════════════════
+   Covers the app until a valid session AND a live entitlement are confirmed.
+   Present in the HTML from the first byte, so the app is never briefly usable
+   while JavaScript is still starting up. */
+#gate{position:fixed;inset:0;z-index:9000;background:var(--ground);
+  display:flex;align-items:center;justify-content:center;
+  padding:24px max(18px,env(safe-area-inset-left,0px));
+  padding-top:max(24px,env(safe-area-inset-top,0px));
+  padding-bottom:max(24px,env(safe-area-inset-bottom,0px));
+  overflow-y:auto}
+#gate[hidden]{display:none!important}
+.gcard{background:var(--card);border-radius:var(--r);box-shadow:var(--shadow);
+  padding:26px 22px;width:100%;max-width:380px;margin:auto}
+.gshut{width:52px;height:52px;border-radius:16px;background:var(--court);
+  display:grid;place-items:center;margin:0 auto 14px}
+.gtitle{font-family:Fredoka,ui-rounded,system-ui,sans-serif;font-weight:600;
+  font-size:23px;color:var(--ink);text-align:center;margin:0}
+.gsub{color:var(--ink2);font-size:14px;text-align:center;margin:5px 0 20px;line-height:1.5}
+.gfield{margin-bottom:13px}
+.gfield label{display:block;font-size:12px;font-weight:800;color:var(--ink3);
+  letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px}
+.gfield input{width:100%;font:inherit;font-size:16px;padding:13px 14px;
+  border:2px solid var(--line);border-radius:var(--r-sm);background:var(--white);
+  color:var(--ink);min-height:var(--tap)}
+.gfield input:focus{outline:none;border-color:var(--court)}
+#gBtn{width:100%;font:inherit;font-size:16px;font-weight:800;color:#fff;
+  background:var(--court);border:none;border-radius:var(--r-sm);
+  min-height:var(--tap);margin-top:7px;cursor:pointer;
+  box-shadow:0 3px 0 var(--court-d)}
+#gBtn:active{transform:translateY(2px);box-shadow:0 1px 0 var(--court-d)}
+#gBtn:disabled{opacity:.6}
+.gerr{background:var(--red-l);color:var(--red-d);border-radius:var(--r-sm);
+  padding:11px 13px;font-size:13.5px;font-weight:700;margin-bottom:14px;line-height:1.45}
+.gnote{color:var(--ink3);font-size:12.5px;text-align:center;margin-top:16px;line-height:1.5}
+.gstack{display:flex;flex-direction:column;gap:9px;margin-top:18px}
+.gstack button{font:inherit;font-weight:800;font-size:15px;padding:13px;
+  border-radius:var(--r-sm);border:2px solid var(--line);background:var(--white);
+  color:var(--ink);cursor:pointer;min-height:var(--tap)}
+#acctBtn{background:rgba(255,255,255,.16);border:none;color:#fff;width:34px;height:34px;
+  border-radius:50%;font-size:15px;cursor:pointer;display:grid;place-items:center;
+  flex:0 0 auto;margin-left:6px}
+#acctBtn:active{background:rgba(255,255,255,.3)}
 </style>
 </head>
 <body>
+<div id="gate">
+  <div class="gcard">
+    <div class="gshut">
+      <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="#fff"
+           stroke-width="1.9" stroke-linecap="round">
+        <path d="M12 3.2 8.6 14.2M12 3.2l3.4 11M12 3.2v11M9.6 4.6 7 14.6M14.4 4.6 17 14.6"/>
+        <path d="M8.1 9.2c2.6.9 5.2.9 7.8 0" stroke-width="1.5"/>
+        <circle cx="12" cy="18.2" r="3.1" fill="#B9F27C" stroke="none"/>
+        <circle cx="12" cy="18.2" r="3.1"/>
+      </svg>
+    </div>
+    <div id="gBody">
+      <h1 class="gtitle">Badminton Rotation</h1>
+      <p class="gsub">Sign in to start a session.</p>
+      <div id="gErr"></div>
+      <form id="gForm" autocomplete="on">
+        <div class="gfield"><label for="gEmail">Email</label>
+          <input id="gEmail" type="email" autocomplete="username"
+                 autocapitalize="off" autocorrect="off" required></div>
+        <div class="gfield"><label for="gPass">Password</label>
+          <input id="gPass" type="password" autocomplete="current-password" required></div>
+        <button id="gBtn" type="submit">Sign in</button>
+      </form>
+      <p class="gnote">Accounts are issued by the organiser.<br>Contact them if you need access.</p>
+    </div>
+  </div>
+</div>
+
 <header>
   <svg class="shuttle" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round">
     <path d="M12 3.2 8.6 14.2M12 3.2l3.4 11M12 3.2v11M9.6 4.6 7 14.6M14.4 4.6 17 14.6"/>
@@ -335,6 +405,7 @@ tr.rest td:nth-child(2)::after{content:"RESTING";font-size:9px;font-weight:900;c
     <div class="ttl" id="hTitle">Badminton</div><div class="sub" id="hSub">Rotation &amp; Points</div>
   </div>
   <div id="hRight"></div>
+  <button id="acctBtn" type="button" title="Account" hidden>⏻</button>
 </header>
 <main id="app"></main>
 <nav id="nav"></nav>
@@ -345,7 +416,7 @@ tr.rest td:nth-child(2)::after{content:"RESTING";font-size:9px;font-weight:900;c
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v20';   // bump together with V in sw.js
+const BUILD='v21';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -1597,6 +1668,286 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
     }catch(_){}
   });
 }
+</script>
+<script>
+"use strict";
+/* =========================================================================
+   ACCESS GATE
+   ------------------------------------------------------------------------
+   The app itself stays offline-first: everything below only decides whether
+   the gate is lifted. Once it is, not a single rally depends on the network.
+
+   Honest limit: this is a lock on the front door of a building whose data
+   lives inside the visitor's own phone. Someone who opens developer tools
+   can remove the overlay. What they CANNOT do is exceed the free player cap
+   or grant themselves premium -- those are enforced by the database. This
+   gate stops ordinary sharing, not a determined engineer.
+   ========================================================================= */
+(function(){
+  const SUPA = 'https://ubgabydmcjwqfsffvwoz.supabase.co';
+  const PKEY = 'sb_publishable_R8HZkFXpwUlHvRkFlCLq5A_P2wGXmcY';
+  const AUTH_LS = 'badminton_auth_v1';
+  const DEV_LS  = 'badminton_device_v1';
+  const GRACE_DAYS = 3;          // offline tolerance before the app locks
+  const RECHECK_MS = 5*60*1000;  // how often to re-ask while open
+
+  const $g = s => document.querySelector(s);
+  const gate = $g('#gate'), gBody = $g('#gBody'), acctBtn = $g('#acctBtn');
+
+  let A = null;   // {access_token, refresh_token, expires_at, id, email}
+  let C = null;   // {allowed, plan, expires_at, suspended, checkedAt}
+
+  const read = k => { try{ return JSON.parse(localStorage.getItem(k)||'null') }catch(_){ return null } };
+  const write = (k,v) => { try{ localStorage.setItem(k, JSON.stringify(v)) }catch(_){} };
+  const drop = k => { try{ localStorage.removeItem(k) }catch(_){} };
+
+  /* ── device identity ──────────────────────────────────────────────────
+     A random id per browser. It identifies the DEVICE, never the person,
+     and carries nothing that could single anybody out. */
+  function deviceKey(){
+    let d = null;
+    try{ d = localStorage.getItem(DEV_LS) }catch(_){}
+    if(!d){
+      d = (crypto.randomUUID ? crypto.randomUUID()
+          : 'd'+Date.now()+Math.random().toString(36).slice(2));
+      try{ localStorage.setItem(DEV_LS, d) }catch(_){}
+    }
+    return d;
+  }
+  function deviceLabel(){
+    const u = navigator.userAgent;
+    const os = /iPhone/.test(u) ? 'iPhone' : /iPad/.test(u) ? 'iPad'
+             : /Android/.test(u) ? 'Android' : /Mac OS X/.test(u) ? 'Mac'
+             : /Windows/.test(u) ? 'Windows' : 'Other';
+    const br = /CriOS|Chrome/.test(u) ? 'Chrome' : /FxiOS|Firefox/.test(u) ? 'Firefox'
+             : /Edg/.test(u) ? 'Edge' : /Safari/.test(u) ? 'Safari' : '';
+    const standalone = window.matchMedia &&
+      matchMedia('(display-mode: standalone)').matches ? ' · installed' : '';
+    return (os + (br ? ' · '+br : '') + standalone);
+  }
+
+  /* ── network helpers ──────────────────────────────────────────────── */
+  async function sbFetch(path, opts={}){
+    return fetch(SUPA+path, {
+      ...opts,
+      headers:{ apikey:PKEY, 'Content-Type':'application/json',
+                ...(A ? { Authorization:'Bearer '+A.access_token } : {}),
+                ...(opts.headers||{}) }
+    });
+  }
+
+  async function refreshSession(){
+    if(!A?.refresh_token) return false;
+    try{
+      const r = await fetch(SUPA+'/auth/v1/token?grant_type=refresh_token', {
+        method:'POST', headers:{ apikey:PKEY, 'Content-Type':'application/json' },
+        body: JSON.stringify({ refresh_token: A.refresh_token })
+      });
+      if(!r.ok) return false;
+      const j = await r.json();
+      A = { access_token:j.access_token, refresh_token:j.refresh_token,
+            expires_at: Date.now() + (j.expires_in||3600)*1000,
+            id: j.user?.id || A.id, email: j.user?.email || A.email };
+      write(AUTH_LS, A);
+      return true;
+    }catch(_){ return false; }
+  }
+
+  /* ── the entitlement question ─────────────────────────────────────── */
+  async function checkAccess(){
+    if(!A) return { state:'anon' };
+
+    if(A.expires_at && Date.now() > A.expires_at - 60000){
+      const ok = await refreshSession();
+      if(!ok && navigator.onLine) return { state:'expired' };
+    }
+
+    let rows;
+    try{
+      const r = await sbFetch('/rest/v1/admin_overview?select=plan,expires_at,suspended&id=eq.'+A.id);
+      if(r.status === 401){
+        const ok = await refreshSession();
+        if(!ok) return { state:'expired' };
+        return checkAccess();
+      }
+      if(!r.ok) throw new Error('http '+r.status);
+      rows = await r.json();
+    }catch(_){
+      // Offline, or the server is unreachable. Fall back to what we last knew.
+      if(C && C.allowed && (Date.now() - C.checkedAt) < GRACE_DAYS*864e5)
+        return { state:'ok', offline:true };
+      if(C && C.allowed) return { state:'grace_over' };
+      return { state:'offline_unknown' };
+    }
+
+    const row = rows[0];
+    if(!row) return { state:'no_account' };
+
+    const live = !row.suspended
+      && (row.plan === 'trial' || row.plan === 'active')
+      && (!row.expires_at || new Date(row.expires_at).getTime() > Date.now());
+
+    C = { allowed:live, plan:row.plan, expires_at:row.expires_at,
+          suspended:row.suspended, checkedAt:Date.now() };
+    write('badminton_ent_v1', C);
+
+    if(row.suspended) return { state:'suspended' };
+    if(!live)         return { state:'lapsed', plan:row.plan };
+    return { state:'ok' };
+  }
+
+  /* ── background bookkeeping (never blocks the UI) ──────────────────── */
+  async function touch(){
+    if(!A) return;
+    const now = new Date().toISOString();
+    try{
+      await sbFetch('/rest/v1/devices?on_conflict=host_id,device_key', {
+        method:'POST',
+        headers:{ Prefer:'resolution=merge-duplicates' },
+        body: JSON.stringify({ host_id:A.id, device_key:deviceKey(),
+                               label:deviceLabel(), last_seen:now })
+      });
+      await sbFetch('/rest/v1/hosts?id=eq.'+A.id, {
+        method:'PATCH', body: JSON.stringify({ last_seen_at: now }) });
+    }catch(_){}
+  }
+
+  /* ── screens ──────────────────────────────────────────────────────── */
+  const SIGNIN_HTML = gBody.innerHTML;
+
+  function showSignIn(msg){
+    gBody.innerHTML = SIGNIN_HTML;
+    if(msg) $g('#gErr').innerHTML = '<div class="gerr">'+msg+'</div>';
+    gate.hidden = false; acctBtn.hidden = true;
+    wireForm();
+  }
+
+  function showLocked(title, body, showRetry){
+    gBody.innerHTML =
+      '<h1 class="gtitle">'+title+'</h1>'+
+      '<p class="gsub">'+body+'</p>'+
+      '<div class="gstack">'+
+        (showRetry ? '<button type="button" id="gRetry">Try again</button>' : '')+
+        '<button type="button" id="gOut">Sign out</button>'+
+      '</div>';
+    gate.hidden = false; acctBtn.hidden = true;
+    const rt = $g('#gRetry'); if(rt) rt.onclick = () => boot(true);
+    $g('#gOut').onclick = signOut;
+  }
+
+  function openApp(){
+    gate.hidden = true; acctBtn.hidden = false;
+    touch();
+  }
+
+  function signOut(){
+    A = null; C = null;
+    drop(AUTH_LS); drop('badminton_ent_v1');
+    showSignIn('');
+  }
+
+  acctBtn.onclick = () => {
+    const who = A?.email || '';
+    const plan = C ? (C.suspended ? 'suspended'
+                  : C.plan === 'active' ? 'Premium'
+                  : C.plan === 'trial'  ? 'Trial' : C.plan) : '';
+    showLocked('Signed in',
+      who + (plan ? '<br>Plan: <b>'+plan+'</b>' : ''), false);
+    $g('#gBody').insertAdjacentHTML('beforeend',
+      '<div class="gstack" style="margin-top:9px">'+
+      '<button type="button" id="gBack">Back to the app</button></div>');
+    $g('#gBack').onclick = () => { gate.hidden = true; acctBtn.hidden = false; };
+  };
+
+  /* ── sign in ──────────────────────────────────────────────────────── */
+  function wireForm(){
+    const f = $g('#gForm'); if(!f) return;
+    f.onsubmit = async e => {
+      e.preventDefault();
+      const btn = $g('#gBtn'), em = $g('#gEmail').value.trim(), pw = $g('#gPass').value;
+      btn.disabled = true; btn.textContent = 'Signing in…';
+      $g('#gErr').innerHTML = '';
+      try{
+        const r = await fetch(SUPA+'/auth/v1/token?grant_type=password', {
+          method:'POST', headers:{ apikey:PKEY, 'Content-Type':'application/json' },
+          body: JSON.stringify({ email:em, password:pw })
+        });
+        const j = await r.json();
+        if(!r.ok) throw new Error(
+          /Invalid login/i.test(j.error_description||j.msg||'')
+            ? 'That email and password don’t match an account.'
+            : (j.error_description || j.msg || 'Could not sign in.'));
+
+        A = { access_token:j.access_token, refresh_token:j.refresh_token,
+              expires_at: Date.now() + (j.expires_in||3600)*1000,
+              id:j.user.id, email:j.user.email };
+        write(AUTH_LS, A);
+
+        // A different host on this phone starts with a clean sheet -- the
+        // previous roster belongs to the previous account, not to them.
+        const last = localStorage.getItem('badminton_last_email');
+        if(last && last !== A.email){ drop('badminton_rotation_v1'); }
+        try{ localStorage.setItem('badminton_last_email', A.email) }catch(_){}
+
+        await boot(true);
+      }catch(err){
+        $g('#gErr').innerHTML = '<div class="gerr">'+
+          String(err.message).replace(/[<>]/g,'')+'</div>';
+        btn.disabled = false; btn.textContent = 'Sign in';
+      }
+    };
+  }
+
+  /* ── boot / recheck ───────────────────────────────────────────────── */
+  async function boot(reloadState){
+    A = read(AUTH_LS); C = read('badminton_ent_v1');
+    if(!A){ showSignIn(''); return; }
+
+    const res = await checkAccess();
+    switch(res.state){
+      case 'ok':
+        if(reloadState && typeof load === 'function' && typeof render === 'function'){
+          load(); render();
+        }
+        openApp();
+        break;
+      case 'suspended':
+        showLocked('Access paused',
+          'Your account has been paused by the organiser. Your players and history are safe — contact them to restore access.', true);
+        break;
+      case 'lapsed':
+        showLocked('Subscription ended',
+          'This account no longer has an active plan. Contact the organiser to renew — nothing has been deleted.', true);
+        break;
+      case 'grace_over':
+        showLocked('Connect to continue',
+          'The app has been offline for more than '+GRACE_DAYS+' days and needs to check your plan once. Find signal or wifi and try again.', true);
+        break;
+      case 'offline_unknown':
+        showLocked('No connection',
+          'Sign in needs the internet the first time. After that the app works offline.', true);
+        break;
+      case 'no_account':
+        showLocked('Account not set up',
+          'This login exists but has no plan attached. Contact the organiser.', true);
+        break;
+      default:
+        showSignIn(res.state === 'expired'
+          ? 'Your session expired. Please sign in again.' : '');
+    }
+  }
+
+  // Re-ask periodically and whenever the phone comes back to the app, so a
+  // revoked plan bites within minutes rather than at the next cold start.
+  setInterval(() => { if(A && gate.hidden) boot(false); }, RECHECK_MS);
+  document.addEventListener('visibilitychange', () => {
+    if(document.visibilityState === 'visible' && A) boot(false);
+  });
+  addEventListener('online', () => { if(A) boot(false); });
+
+  wireForm();
+  boot(true);
+})();
 </script>
 </body>
 </html>
