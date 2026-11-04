@@ -325,13 +325,23 @@ tr.rest td:nth-child(2)::after{content:"RESTING";font-size:9px;font-weight:900;c
    Covers the app until a valid session AND a live entitlement are confirmed.
    Present in the HTML from the first byte, so the app is never briefly usable
    while JavaScript is still starting up. */
-#gate{position:fixed;inset:0;z-index:9000;background:var(--ground);
+/* NOT position:fixed, deliberately. An installed iOS app with
+   apple-mobile-web-app-status-bar-style=black-translucent and
+   viewport-fit=cover mis-maps hit testing on a full-screen fixed element:
+   it paints in the right place but every tap lands a status-bar height
+   above the target, so the screen looks perfect and nothing responds.
+   Flex centering inside an overflow:auto box has the same failure mode.
+   In normal document flow neither can happen. */
+#gate{min-height:100vh;min-height:100dvh;background:var(--ground);
   display:flex;align-items:center;justify-content:center;
   padding:24px max(18px,env(safe-area-inset-left,0px));
   padding-top:max(24px,env(safe-area-inset-top,0px));
-  padding-bottom:max(24px,env(safe-area-inset-bottom,0px));
-  overflow-y:auto}
+  padding-bottom:max(24px,env(safe-area-inset-bottom,0px))}
 #gate[hidden]{display:none!important}
+/* While the gate is up the app is not merely covered -- it is gone, so
+   nothing of it can intercept a tap. */
+html.gated header,html.gated main,html.gated nav,html.gated #modalRoot{display:none!important}
+html.gated body{padding-bottom:0}
 .gcard{background:var(--card);border-radius:var(--r);box-shadow:var(--shadow);
   padding:26px 22px;width:100%;max-width:380px;margin:auto}
 .gshut{width:52px;height:52px;border-radius:16px;background:var(--court);
@@ -372,6 +382,7 @@ tr.rest td:nth-child(2)::after{content:"RESTING";font-size:9px;font-weight:900;c
 </style>
 </head>
 <body>
+<script>document.documentElement.classList.add('gated')</script>
 <div id="gate">
   <div class="gcard">
     <div class="gshut">
@@ -425,7 +436,7 @@ tr.rest td:nth-child(2)::after{content:"RESTING";font-size:9px;font-weight:900;c
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v26';   // bump together with V in sw.js
+const BUILD='v27';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -1703,6 +1714,13 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
   const $g = s => document.querySelector(s);
   const gate = $g('#gate'), gBody = $g('#gBody'), acctBtn = $g('#acctBtn');
 
+  // Single place that decides whether the app exists on the page at all.
+  const setGate = on => {
+    gate.hidden = !on;
+    document.documentElement.classList.toggle('gated', on);
+    if(on) window.scrollTo(0,0);
+  };
+
   let A = null;   // {access_token, refresh_token, expires_at, id, email}
   let C = null;   // {allowed, plan, expires_at, suspended, checkedAt}
 
@@ -1849,7 +1867,7 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
   function showSignIn(msg){
     gBody.innerHTML = SIGNIN_HTML;
     if(msg) $g('#gErr').innerHTML = '<div class="gerr">'+msg+'</div>';
-    gate.hidden = false; acctBtn.hidden = true;
+    setGate(true); acctBtn.hidden = true;
     wireForm();
   }
 
@@ -1861,13 +1879,13 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
         (showRetry ? '<button type="button" id="gRetry">Try again</button>' : '')+
         '<button type="button" id="gOut">Sign out</button>'+
       '</div>';
-    gate.hidden = false; acctBtn.hidden = true;
+    setGate(true); acctBtn.hidden = true;
     const rt = $g('#gRetry'); if(rt) rt.onclick = () => boot(true);
     $g('#gOut').onclick = signOut;
   }
 
   function openApp(){
-    gate.hidden = true; acctBtn.hidden = false;
+    setGate(false); acctBtn.hidden = false;
     touch();
   }
 
@@ -1887,7 +1905,7 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
     $g('#gBody').insertAdjacentHTML('beforeend',
       '<div class="gstack" style="margin-top:9px">'+
       '<button type="button" id="gBack">Back to the app</button></div>');
-    $g('#gBack').onclick = () => { gate.hidden = true; acctBtn.hidden = false; };
+    $g('#gBack').onclick = () => { setGate(false); acctBtn.hidden = false; };
   };
 
   /* ── sign in ──────────────────────────────────────────────────────── */
