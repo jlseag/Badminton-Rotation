@@ -6,7 +6,7 @@ competitive as the session goes on.
 
 ## Running it
 
-**Live:** https://jlseag.github.io/Badminton-Rotation/
+**Live:** https://mabyo.pages.dev/
 
 Open it on your phone, then Share → **Add to Home Screen**. It installs as a standalone app
 with its own icon, and a service worker caches everything on first load, so it keeps working

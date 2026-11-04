@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Badminton">
 <meta name="mobile-web-app-capable" content="yes">
-<title>Badminton Rotation</title>
+<title>Mabyo</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" href="icon.png">
 <link rel="apple-touch-icon" href="icon.png">
@@ -384,7 +384,7 @@ tr.rest td:nth-child(2)::after{content:"RESTING";font-size:9px;font-weight:900;c
       </svg>
     </div>
     <div id="gBody">
-      <h1 class="gtitle">Badminton Rotation</h1>
+      <h1 class="gtitle">Mabyo</h1>
       <p class="gsub">Sign in to start a session.</p>
       <div id="gErr"></div>
       <form id="gForm" autocomplete="on">
@@ -425,7 +425,7 @@ tr.rest td:nth-child(2)::after{content:"RESTING";font-size:9px;font-weight:900;c
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v24';   // bump together with V in sw.js
+const BUILD='v25';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));

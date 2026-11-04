@@ -1,8 +1,8 @@
 {
-  "name": "Badminton Rotation",
-  "short_name": "Badminton",
+  "name": "Mabyo",
+  "short_name": "Mabyo",
   "description": "Rotation, teams and points for a casual 2v2 badminton session",
-  "start_url": "./index.html",
+  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
