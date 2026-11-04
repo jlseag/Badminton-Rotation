@@ -1,5 +1,5 @@
 /* Offline cache — the courts usually have worse signal than the car park. */
-const V = 'badminton-v23';
+const V = 'badminton-v24';
 const ASSETS = ['./', './index.html', './manifest.json', './icon.png'];
 
 // GitHub Pages serves these with max-age=600, so a plain fetch here can hand back
