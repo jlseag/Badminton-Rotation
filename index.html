@@ -445,7 +445,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v33';   // bump together with V in sw.js
+const BUILD='v34';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -453,7 +453,7 @@ const uid=()=>'p'+Math.random().toString(36).slice(2,9);
 
 /* ---------------- state ---------------- */
 function defState(){return{
-  v:1, started:false, ended:false,
+  v:1, started:false, ended:false, queueOpen:false,
   players:[],                 // {id,name,tier,away,qg,lastPlayed} — array order IS the
                               // skill ranking, and the only thing that sets level
   rounds:[],                  // Synchronised: finished rounds
@@ -1176,9 +1176,21 @@ function viewRolling(st){
   <div class="card tight">
     <div class="row"><span class="mini" style="color:var(--court)">Next up</span>
       <span class="sp"></span><span class="mini">${queue.length} waiting</span></div>
-    ${queue.length
-      ? `<div class="row wrap" style="margin-top:8px">${queue.map(qPill).join('')}</div>`
-      : '<div class="mini" style="margin-top:8px">Everyone is on court.</div>'}
+    ${(() => {
+      if(!queue.length) return '<div class="mini" style="margin-top:8px">Everyone is on court.</div>';
+      // With 40 players there can be 20+ waiting, and the whole list would
+      // push every court off the screen -- so the host scrolls past names
+      // to reach the court that just finished, which is the urgent thing.
+      // Show who is actually next; the rest is one tap away.
+      const SHOW = 8;
+      const long = queue.length > SHOW && !S.queueOpen;
+      const shown = long ? queue.slice(0, SHOW) : queue;
+      return `<div class="row wrap" style="margin-top:8px">${shown.map(qPill).join('')}</div>` +
+        (queue.length > SHOW
+          ? `<button class="btn xs" style="margin-top:9px" onclick="S.queueOpen=${long?'true':'false'};render()">
+               ${long ? '+ ' + (queue.length - SHOW) + ' more waiting' : 'Show fewer'}</button>`
+          : '');
+    })()}
     ${away.length ? `<div class="mini" style="margin-top:10px;color:var(--ink3)">
         ${away.length} away: ${away.map(p=>esc(p.name)).join(', ')} ·
         <button class="btn xs" onclick="go('players')">manage</button></div>` : ''}
@@ -1331,23 +1343,54 @@ function viewBoard(st){
   const label={points:'Total Points',avg:'Avg / Game',wins:'Wins',winpct:'Win %'}[S.settings.rankBy];
   const pct=s=>Math.round(s.wr*100)+'%';
   const medal=['\u{1F947}','\u{1F948}','\u{1F949}'];
-  return `
-  <div class="card tight"><div class="row"><span class="mini">Ranked by ${label}</span><span class="sp"></span>
-    <span class="mini">avg ${avgG.toFixed(1)} games</span></div></div>
-  <div class="card board">
-  <table><thead><tr><th class="rk">#</th><th>Player</th><th>Pts</th><th>G</th><th>Avg</th><th>W</th><th>L</th><th>Win%</th></tr></thead><tbody>
-  ${list.map((s,i)=>`<tr class="${i<3?'top'+(i+1):''} ${resting.has(s.id)?'rest':''}">
-    <td class="rk">${i<3?medal[i]:i+1}</td>
+
+  const rowFor=(s,i,showMedal)=>`<tr class="${showMedal&&i<3?'top'+(i+1):''} ${resting.has(s.id)?'rest':''}">
+    <td class="rk">${showMedal&&i<3?medal[i]:i+1}</td>
     <td>${esc(nameOf(s.id))}</td>
     <td style="font-weight:900">${s.pts}</td>
     <td class="${s.games<avgG-0.5?'few':''}">${s.games}</td>
     <td>${s.games?s.avg.toFixed(1):'\u2013'}</td>
     <td>${s.wins}</td><td>${s.losses}</td>
-    <td>${s.games?pct(s):'\u2013'}</td></tr>`).join('')}
-  </tbody></table></div>
-  <div class="muted" style="padding:0 4px 4px">${medal.join('')} top three \u00b7
-    <span style="color:var(--court)">green</span> = fewer games than the session average</div>
-  ${highlights(st)}`;
+    <td>${s.games?pct(s):'\u2013'}</td></tr>`;
+
+  const table=(rows,showMedal)=>`<div class="card board">
+    <table><thead><tr><th class="rk">#</th><th>Player</th><th>Pts</th><th>G</th><th>Avg</th><th>W</th><th>L</th><th>Win%</th></tr></thead>
+    <tbody>${rows.map((s,i)=>rowFor(s,i,showMedal)).join('')}</tbody></table></div>`;
+
+  const header=`<div class="card tight"><div class="row"><span class="mini">Ranked by ${label}</span><span class="sp"></span>
+    <span class="mini">avg ${avgG.toFixed(1)} games</span></div></div>`;
+
+  // Social mix: one table, as before -- everyone plays everyone, so one
+  // ranking is meaningful.
+  if(S.settings.pairing!=='level'){
+    return header + table(list,true) +
+      `<div class="muted" style="padding:0 4px 4px">${medal.join('')} top three \u00b7
+        <span style="color:var(--court)">green</span> = fewer games than the session average</div>` +
+      highlights(st);
+  }
+
+  // Same level: a single table is misleading, because each group only ever
+  // plays itself. Beating your own group 21-18 scores the same whichever
+  // group it is, so the overall order says little about who is stronger.
+  // Top three stays for bragging rights; the per-group tables are the part
+  // the host can actually read something into.
+  const groups=TIERS.map(([k,name])=>{
+    const ids=new Set(S.players.filter(p=>p.tier===k).map(p=>p.id));
+    return {k,name,rows:list.filter(s=>ids.has(s.id))};
+  }).filter(g=>g.rows.length);
+
+  return header +
+   `<div class="sec-h">Top three \u2014 all groups</div>` +
+   table(list.slice(0,3),true) +
+   `<div class="muted" style="padding:0 4px 10px">Most points tonight, whichever group they play in.</div>` +
+   groups.map(g=>`
+     <div class="sec-h"><i class="tdot" data-tier="${g.k}" style="margin-right:7px"></i>${g.name}
+       <span style="font-weight:700;color:var(--ink3)"> \u00b7 ${g.rows.length}</span></div>
+     ${table(g.rows,false)}`).join('') +
+   `<div class="muted" style="padding:0 4px 4px">Each group only plays itself, so compare people
+     <b>within</b> a group \u2014 someone winning most of theirs may belong a group up.
+     <span style="color:var(--court)">green</span> = fewer games than the session average</div>` +
+   highlights(st);
 }
 
 function highlights(st){
