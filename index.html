@@ -445,7 +445,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v29';   // bump together with V in sw.js
+const BUILD='v30';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -1967,11 +1967,58 @@ function chooseFour(order, st, str){
   if(order.length < 4) return null;
   const n  = S.matches ? S.matches.length : 0;
   const qg = id => (P(id) ? (P(id).qg || 0) : 0);
+  const level = S.settings.pairing === 'level';
+
+  // Same level: skill rank is the player's position in the skill order, so
+  // four players who sit close together in that list are a same-level court.
+  // Spread is what makes 1 Advanced + 1 Beginner vs 2 Intermediate -- a
+  // match the balance term actually LIKES, because the totals cancel, while
+  // being a bad game for both ends of it.
+  const rank = {}; S.players.forEach((pl,i)=>rank[pl.id]=i);
+  const spreadCost = four => {
+    if(!level) return 0;
+    const r = four.map(id=>rank[id]);
+    const gap = Math.max(...r) - Math.min(...r);
+    return gap * gap * 1.4;        // squared: borrowing one neighbour is
+  };                               // cheap, reaching across the list is not
+
+  // ── Same level ──────────────────────────────────────────────────────
+  // Synchronised mode gets same-level courts by chunking the skill order.
+  // Do the same to the queue: sort who is free by skill rank, then take the
+  // best CONTIGUOUS window of four. Contiguity is what guarantees a court of
+  // Advanced, or -- when only two Advanced are free -- Advanced plus the two
+  // nearest below them, rather than an Advanced beside a Beginner.
+  // Fairness still leads: the window is chosen mostly on games played.
+  if(level){
+    const byRank = order.slice().sort((a,b)=>rank[a]-rank[b]);
+    // Whoever is at the front of the fairness queue plays, full stop. The
+    // window is chosen AROUND them. Without this hard floor, skill grouping
+    // can quietly leave one person sitting while the tidier courts form.
+    const front = order[0];
+    let best = null;
+    for(let i = 0; i + 4 <= byRank.length; i++){
+      const four = byRank.slice(i, i + 4);
+      if(!four.includes(front)) continue;
+      const qsum = four.reduce((t,id)=>t+qg(id), 0);
+      const r    = pairFour(four, st, str);
+      const wait = four.reduce((t,id)=>{
+        const pl = P(id); return t + (n - (pl ? (pl.lastPlayed||0) : 0));
+      },0);
+      // games played dominates; variety and waiting break ties
+      const cost = qsum * 1000 + r.cost - 25 * wait;
+      if(!best || cost < best.cost) best = {a:r.a, b:r.b, cost};
+    }
+    if(best) return best;
+  }
+
   const cut  = qg(order[3]);
   const must = order.filter(id => qg(id) <  cut);
-  let   flex = order.filter(id => qg(id) === cut);
+  // In Same level the host has asked for skill grouping, so allow one extra
+  // game of slack when forming the pool -- without it a court of Advanced
+  // can never assemble and the mode cannot do its job.
+  let   flex = order.filter(id => qg(id) === cut || (level && qg(id) === cut + 1));
   const need = 4 - must.length;
-  if(need <= 0)   return pairFour(must.slice(0, 4), st, str);
+  if(need <= 0)   return pairFour(order.slice(0, 4), st, str);
   if(flex.length <= need) return pairFour(must.concat(flex).slice(0, 4), st, str);
 
   flex = flex.slice(0, 8);                          // keep the search small
@@ -1987,7 +2034,7 @@ function chooseFour(order, st, str){
       const wait = four.reduce((t,id)=>{
         const pl = P(id); return t + (n - (pl ? (pl.lastPlayed||0) : 0));
       },0);
-      const cost = r.cost - 25 * wait;   // 25 measured best across 8-16 players
+      const cost = r.cost + spreadCost(four) - 25 * wait;
       if(!best || cost < best.cost) best = {a:r.a, b:r.b, cost};
       return;
     }
