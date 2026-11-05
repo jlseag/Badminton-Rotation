@@ -169,17 +169,6 @@ nav button.on{color:var(--court);background:rgba(14,138,79,.11)}
 .tier-body{display:flex;flex-direction:column;gap:9px;min-height:54px}
 .tier-empty{border:2px dashed var(--line2);border-radius:var(--r-sm);padding:14px;text-align:center;
   color:var(--ink3);font-size:13px;font-weight:700}
-.court.cmp .court-h{cursor:pointer}
-.cmpb{padding:11px 12px 12px!important}
-.mteam{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.mvs{font-size:10.5px;font-weight:900;color:var(--ink3);letter-spacing:.1em;
-  text-transform:uppercase;margin:5px 0 5px 4px}
-.mini-chip{display:inline-flex;align-items:center;gap:6px;background:var(--ground);
-  border:2px solid var(--line);border-radius:11px;padding:8px 11px;font-size:14px;
-  font-weight:800;color:var(--ink);min-height:40px}
-.mini-chip.sel{border-color:var(--court);background:rgba(14,138,79,.12)}
-.mini-chip .tdot{width:9px;height:9px}
-.mact{display:flex;gap:8px;margin-top:11px}
 .isaway{opacity:.55}
 .awaytag{margin-left:7px;font-size:10.5px;font-weight:900;letter-spacing:.06em;
   text-transform:uppercase;color:var(--ink3);background:var(--line);
@@ -456,7 +445,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v35';   // bump together with V in sw.js
+const BUILD='v36';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -464,7 +453,7 @@ const uid=()=>'p'+Math.random().toString(36).slice(2,9);
 
 /* ---------------- state ---------------- */
 function defState(){return{
-  v:1, started:false, ended:false, queueOpen:false, bigCourt:null,
+  v:1, started:false, ended:false, queueOpen:false,
   players:[],                 // {id,name,tier,away,qg,lastPlayed} — array order IS the
                               // skill ranking, and the only thing that sets level
   rounds:[],                  // Synchronised: finished rounds
@@ -1162,33 +1151,6 @@ function viewRolling(st){
     const b = balanceOf(c, str), lbl = b>=85?'🟢 Very balanced':b>=70?'🟡 Fair':'🔴 Uneven';
     const col = b>=85?'var(--acc)':b>=70?'var(--warn)':'var(--bad)';
     const ready = c.winner && hasScore(c);
-
-    // A full court card is ~530px. With five courts that is 2,650px of
-    // scrolling to reach the one that just finished, which is the host's
-    // whole job. Compact shows the same four names and the Finish button
-    // in a third of the height; the detail is one tap away and is only
-    // wanted when setting up, not when recording a result.
-    const expanded = S.bigCourt === i || c.entering;
-    if(!expanded){
-      const mini = id => `<button class="mini-chip ${sel===id?'sel':''}" data-pid="${id}"
-        onclick="event.stopPropagation();tapRolling('${id}')"><i class="tdot" data-tier="${tierOf(P(id))}"></i>${esc(nameOf(id))}</button>`;
-      return `<div class="court cmp">
-        <div class="court-h" onclick="S.bigCourt=${i};render()">
-          <span class="cn">Court ${i+1}${S.settings.pairing==='level'?`<span class="ctier">${courtTiers(c)}</span>`:''}</span>
-          <span class="bal" style="color:${col}">${lbl.slice(0,2)} ${b}%</span>
-        </div>
-        <div class="court-b cmpb">
-          <div class="mteam">${c.a.map(mini).join('')}</div>
-          <div class="mvs">vs</div>
-          <div class="mteam">${c.b.map(mini).join('')}</div>
-          <div class="mact">
-            <button class="btn pri" style="flex:1" onclick="beginResult(${i})">Finish match</button>
-            <button class="btn" style="flex:0 0 auto;padding:0 14px" title="More"
-              onclick="S.bigCourt=${i};render()">\u22ef</button>
-          </div>
-        </div>
-      </div>`;
-    }
     return `<div class="court">
       <div class="court-h">
         <span class="cn">Court ${i+1}${S.settings.pairing==='level'?`<span class="ctier">${courtTiers(c)}</span>`:''}</span>
@@ -1206,7 +1168,6 @@ function viewRolling(st){
              <button class="btn pri full" style="margin-top:12px" onclick="finishMatch(${i})" ${ready?'':'disabled'}>
                Save result${ready?'':' · pick a winner and score'}</button>
              <button class="btn gho full" style="margin-top:8px" onclick="cancelResult(${i})">← Back</button>`}
-        ${!c.entering?`<button class="btn gho full" style="margin-top:8px" onclick="S.bigCourt=null;render()">\u25b2 Collapse</button>`:''}
       </div>
     </div>`;
   };
