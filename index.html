@@ -169,6 +169,14 @@ nav button.on{color:var(--court);background:rgba(14,138,79,.11)}
 .tier-body{display:flex;flex-direction:column;gap:9px;min-height:54px}
 .tier-empty{border:2px dashed var(--line2);border-radius:var(--r-sm);padding:14px;text-align:center;
   color:var(--ink3);font-size:13px;font-weight:700}
+.isaway{opacity:.55}
+.awaytag{margin-left:7px;font-size:10.5px;font-weight:900;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--ink3);background:var(--line);
+  padding:2px 7px;border-radius:999px;vertical-align:1px}
+.awaybtn{flex:0 0 auto;font-size:11.5px;font-weight:800;color:var(--ink2);
+  background:var(--ground);border:2px solid var(--line);border-radius:9px;
+  padding:6px 10px;margin-right:4px}
+.awaybtn:active{background:var(--line)}
 .pitem{touch-action:pan-y;user-select:none;-webkit-user-select:none;
   -webkit-touch-callout:none}   /* pan-y keeps the list scrollable; the grip blocks panning */
 .pitem.lifted{position:fixed;z-index:300;pointer-events:none;margin:0;
@@ -437,7 +445,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v28';   // bump together with V in sw.js
+const BUILD='v29';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -447,12 +455,15 @@ const uid=()=>'p'+Math.random().toString(36).slice(2,9);
 function defState(){return{
   v:1, started:false, ended:false,
   players:[],                 // {id,name,addedRound}  — array order == Initial Skill Rank
-  rounds:[],                  // finished: {n,courts:[{a:[id,id],b:[id,id],winner:'a'|'b',winScore}],resting:[id]}
-  current:null,               // draft/active round (same shape + confirmed)
+  rounds:[],                  // Synchronised: finished rounds
+  current:null,               // Synchronised: draft/active round
+  courts:[],                  // Rolling: one independent match per court (or null)
+  matches:[],                 // Rolling: finished matches, oldest first
   forced:{pairs:[],match:null},
   locks:[],                   // [[idA,idB],...] — locked partners, kept every round until unlocked
   settings:{
     courts:2, mode:'firstto', total:21, earlyRounds:4,
+    style:'rolling', restOne:false,
     partnerStrict:4, oppStrict:3, balance:3, restFair:4,
     pairing:'level', rankBy:'points', allowOverride:false, noise:3
   }
@@ -467,7 +478,19 @@ function load(){
       if(o.settings){                       // pre-existing session: don't change its rules
         if(o.settings.mode===undefined)S.settings.mode='combined';
         if(o.settings.pairing===undefined)S.settings.pairing='social';
+        // A session saved before Rolling existed is a Synchronised one. Left
+        // to default it would come back as Rolling mid-round and lose its
+        // place entirely.
+        if(o.settings.style===undefined)S.settings.style='sync';
       }
+      S.courts=Array.isArray(o.courts)?o.courts:[];
+      S.matches=Array.isArray(o.matches)?o.matches:[];
+      // fields added with Away; absent on anything saved earlier
+      S.players.forEach(p=>{
+        if(p.away===undefined)p.away=false;
+        if(p.qg===undefined)p.qg=0;
+        if(p.lastPlayed===undefined)p.lastPlayed=0;
+      });
       S.forced=Object.assign({pairs:[],match:null},o.forced||{});
       S.locks=Array.isArray(o.locks)?o.locks.filter(x=>Array.isArray(x)&&x.length===2):[];
       S.players.forEach(p=>{if(p.tier==='new')p.tier='beg';
@@ -521,6 +544,11 @@ function setLock(a,b,on){
 function pruneLocks(){S.locks=S.locks.filter(l=>l.every(id=>P(id)))}
 
 /* ---------------- derived stats (single source of truth = rounds) -------- */
+/* Rolling vs Synchronised, and who is actually here. Declared high up
+   because stats() and roundsDone() both depend on them. */
+const isRolling = () => S.settings.style === 'rolling';
+const present   = () => S.players.filter(p => !p.away);
+
 function stats(){
   const m={};
   S.players.forEach(p=>m[p.id]={id:p.id,pts:0,games:0,wins:0,losses:0,rests:0,lastRest:null,
@@ -547,13 +575,27 @@ function stats(){
       }
     });
   };
-  S.rounds.forEach(r=>apply(r,true));
-  // a confirmed (but unfinished) round already counts for partner/opponent/rest history
-  if(S.current&&S.current.confirmed)apply(S.current,false);
+  if(isRolling()){
+    // A finished match is a round with one court and nobody resting, so the
+    // same apply() handles both shapes. Match index doubles as the recency
+    // clock that lastPartner/lastOpp compare against.
+    (S.matches||[]).forEach((mt,i)=>apply({n:i+1,resting:[],courts:[mt]},true));
+    // matches in progress already count for partner/opponent variety
+    const n=(S.matches||[]).length+1;
+    (S.courts||[]).forEach(c=>{if(c)apply({n,resting:[],courts:[c]},false)});
+  }else{
+    S.rounds.forEach(r=>apply(r,true));
+    // a confirmed (but unfinished) round already counts for partner/opponent/rest history
+    if(S.current&&S.current.confirmed)apply(S.current,false);
+  }
   Object.values(m).forEach(s=>{s.avg=s.games?s.pts/s.games:0;s.wr=s.games?s.wins/s.games:0});
   return m;
 }
-const roundsDone=()=>S.rounds.length;
+const roundsDone=()=> isRolling()
+  ? Math.floor(((S.matches||[]).length)/Math.max(1,activeCourts()))
+  : S.rounds.length;
+const matchesDone=()=> isRolling() ? (S.matches||[]).length
+  : S.rounds.reduce((n,r)=>n+(r.courts||[]).length,0);
 const isCompetitive=()=>roundsDone()>=S.settings.earlyRounds;
 
 /* ---------------- current strength score (0-100) ------------------------- */
@@ -943,6 +985,16 @@ function viewStart(){
 function viewGame(st){
   if(!S.started)return viewStart();
   if(S.ended)return viewFinal(st);
+  if(isRolling()){
+    if(activeCourts()<1){
+      const n=S.players.length;
+      return `<div class="card"><div class="empty"><span class="ic">🏸</span><b>${n?'Waiting for players':'No players yet'}</b>
+        A doubles court needs 4. You have ${n} — ${Math.max(0,4-n)} more to start.</div></div>
+        <button class="btn pri full" onclick="go('players')">Add players</button>`;
+    }
+    if(!(S.courts||[]).some(Boolean)) fillCourts();
+    return viewRolling(st);
+  }
   if(activeCourts()<1){
     const n=S.players.length;
     return `<div class="card"><div class="empty"><span class="ic">🏸</span><b>${n?'Waiting for players':'No players yet'}</b>
@@ -1029,6 +1081,149 @@ function viewGame(st){
     <button class="btn gho full" style="margin-top:10px" onclick="reopenRound()">← Edit teams again</button>
     ${endBtn()}
   `}`;
+}
+
+
+/* ---- Rolling: the Game tab ------------------------------------------ */
+const courtAt = i => isRolling() ? (S.courts||[])[i] : (S.current ? S.current.courts[i] : null);
+
+/* Swap a player on a court with someone in the queue, or two players
+   across courts. Same two-tap gesture as Synchronised mode. */
+function tapRolling(id){
+  if(sel === id){ sel = null; render(); return; }
+  if(!sel){ sel = id; render(); return; }
+  const find = x => {
+    for(let i=0;i<(S.courts||[]).length;i++){
+      const c = S.courts[i]; if(!c) continue;
+      let k = c.a.indexOf(x); if(k>=0) return {c, side:'a', k};
+      k = c.b.indexOf(x);     if(k>=0) return {c, side:'b', k};
+    }
+    return null;
+  };
+  const A = find(sel), B = find(id);
+  if(A && B){ A.c[A.side][A.k] = id; B.c[B.side][B.k] = sel; }
+  else if(A && !B){ A.c[A.side][A.k] = id; }       // queued player comes on
+  else if(!A && B){ B.c[B.side][B.k] = sel; }
+  sel = null; render();
+}
+
+function reshuffleCourt(i){
+  const c = S.courts[i]; if(!c) return;
+  if(c.winner || hasScore(c)){ toast('Clear the result first', 1); return; }
+  S.courts[i] = null;
+  fillCourts();
+  render(); toast('Court ' + (i+1) + ' redrawn');
+}
+
+function viewRolling(st){
+  const str = strengths(st);
+  const queue = queueOrder();
+  const away  = S.players.filter(p => p.away);
+  const want  = activeCourts();
+
+  const qPill = id => {
+    const s = st[id] || {games:0};
+    return `<button class="pill ${sel===id?'sel':''}" data-pid="${id}"
+      style="${sel===id?'border-color:var(--court);background:rgba(14,138,79,.12)':''}"
+      onclick="tapRolling('${id}')"><i class="tdot" data-tier="${tierOf(P(id))}"></i>${esc(nameOf(id))}
+      <span style="color:var(--ink3);font-size:11.5px;font-weight:800">${s.games||0} ${(s.games||0)===1?'game':'games'}</span></button>`;
+  };
+
+  const chip = id => {
+    const s = st[id] || {pts:0, games:0};
+    return `<button class="chip ${sel===id?'sel':''}" data-pid="${id}" onclick="tapRolling('${id}')">
+      <i class="tdot" data-tier="${tierOf(P(id))}"></i>
+      <span>${esc(nameOf(id))}</span><span class="st">${s.pts} pts · ${s.games} ${s.games===1?'game':'games'}</span></button>`;
+  };
+
+  const team = (c, side, i) => {
+    const t = c[side];
+    if(!c.entering){
+      return `<div class="team"><div class="tnames">${t.map(chip).join('')}</div></div>`;
+    }
+    const w = c.winner===side, l = c.winner && c.winner!==side;
+    return `<button class="team ${w?'win':''} ${l?'lose':''}" onclick="pickWinner(${i},'${side}')">
+      <div style="font-size:17px;font-weight:800">${esc(teamName(t))}</div>
+      <div class="mini" style="margin-top:4px">${w?'WINNER':l?'':'Tap if they win'}</div></button>`;
+  };
+
+  const courtCard = (c, i) => {
+    if(!c){
+      const held = queue.length >= 4;
+      return `<div class="court"><div class="court-h"><span class="cn">Court ${i+1}</span></div>
+        <div class="court-b"><div class="empty" style="padding:22px 10px">
+          <b>${held ? 'Waiting to mix' : 'Waiting for players'}</b>
+          ${held ? 'Everyone free has just played here together. This court fills when another court finishes, so the groups mix.'
+                 : 'A court needs 4 free players.'}
+        </div></div></div>`;
+    }
+    const b = balanceOf(c, str), lbl = b>=85?'🟢 Very balanced':b>=70?'🟡 Fair':'🔴 Uneven';
+    const col = b>=85?'var(--acc)':b>=70?'var(--warn)':'var(--bad)';
+    const ready = c.winner && hasScore(c);
+    return `<div class="court">
+      <div class="court-h">
+        <span class="cn">Court ${i+1}${S.settings.pairing==='level'?`<span class="ctier">${courtTiers(c)}</span>`:''}</span>
+        <span class="bal" style="color:${col}">${lbl} ${b}%
+          <span class="balbar"><i style="width:${b}%;background:${col}"></i></span></span>
+      </div>
+      <div class="court-b">
+        ${team(c,'a',i)}
+        <div class="vs"><span>VS</span></div>
+        ${team(c,'b',i)}
+        ${!c.entering
+          ? `<button class="btn pri full" style="margin-top:12px" onclick="beginResult(${i})">Finish match</button>
+             <button class="btn gho full" style="margin-top:8px" onclick="reshuffleCourt(${i})">↻ Redraw this court</button>`
+          : `${scoreUI(c,i)}
+             <button class="btn pri full" style="margin-top:12px" onclick="finishMatch(${i})" ${ready?'':'disabled'}>
+               Save result${ready?'':' · pick a winner and score'}</button>
+             <button class="btn gho full" style="margin-top:8px" onclick="cancelResult(${i})">← Back</button>`}
+      </div>
+    </div>`;
+  };
+
+  return `
+  <div class="card tight">
+    <div class="row"><span class="mini" style="color:var(--court)">Next up</span>
+      <span class="sp"></span><span class="mini">${queue.length} waiting</span></div>
+    ${queue.length
+      ? `<div class="row wrap" style="margin-top:8px">${queue.map(qPill).join('')}</div>`
+      : '<div class="mini" style="margin-top:8px">Everyone is on court.</div>'}
+    ${away.length ? `<div class="mini" style="margin-top:10px;color:var(--ink3)">
+        ${away.length} away: ${away.map(p=>esc(p.name)).join(', ')} ·
+        <button class="btn xs" onclick="go('players')">manage</button></div>` : ''}
+  </div>
+
+  ${sel ? `<div class="note">Tap another player to swap <b>${esc(nameOf(sel))}</b> with them.
+      <button class="btn xs" style="margin-left:6px" onclick="sel=null;render()">Cancel</button></div>` : ''}
+
+  ${Array.from({length:Math.max(want, (S.courts||[]).length)}, (_,i) => i)
+      .filter(i => i < want)
+      .map(i => courtCard((S.courts||[])[i], i)).join('')}
+
+  ${endBtn()}`;
+}
+
+/* Entering a result is a two-step: tap Finish, then pick winner + score.
+   Keeps the court card calm while a match is actually being played. */
+function beginResult(i){
+  const c = S.courts[i]; if(!c) return;
+  c.winner = c.winner || null;
+  c.entering = true;
+  render();
+}
+function cancelResult(i){
+  const c = S.courts[i]; if(!c) return;
+  c.entering = false; c.winner = null; c.winScore = null; c.loseScore = null;
+  render();
+}
+
+function undoLastMatch(){
+  const ms=S.matches||[]; if(!ms.length)return;
+  ask('The four who played it go back into the queue and the court is redrawn.','Undo the last match',()=>{
+    const m=ms.pop();
+    [...m.a,...m.b].forEach(id=>{const p=P(id); if(p&&p.qg)p.qg--;});
+    fillCourts(); render(); toast('Match removed');
+  });
 }
 
 function endBtn(){
@@ -1197,9 +1392,11 @@ function tierList(){
       <div class="tier-body">
         ${inTier.length?inTier.map(p=>{
           n++;
-          return `<div class="pitem" data-id="${p.id}">
+          return `<div class="pitem ${p.away?'isaway':''}" data-id="${p.id}">
             <span class="pnum ${n===1?'s1':''}">${n}</span>
-            <span class="pname">${esc(p.name)}</span>
+            <span class="pname">${esc(p.name)}${p.away?'<span class="awaytag">away</span>':''}</span>
+            <button class="awaybtn" title="${p.away?'Bring back':'Mark away'}"
+              onclick="event.stopPropagation();setAway('${p.id}',${p.away?'false':'true'})">${p.away?'Back':'Away'}</button>
             <span class="grip" aria-label="Drag to reorder"><svg viewBox="0 0 24 24">
               <path d="M5 9h14M5 15h14"/></svg></span>
           </div>`;
@@ -1357,6 +1554,25 @@ function setTier(id,t){const p=P(id);if(!p)return;p.tier=t;sortByTier();closeMod
 
 /* ---------------- history ------------------------------------------------ */
 function viewHistory(st){
+  if(isRolling()){
+    const ms=(S.matches||[]);
+    if(!ms.length)return `<div class="card"><div class="empty"><span class="ic">📋</span><b>No matches finished yet</b>Each match appears here as soon as you save its result</div></div>`;
+    const t=n=>new Date(n).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    return ms.slice().reverse().map((m,ri)=>{
+      const ws=m.winScore, ls=m.loseScore;
+      const w=m.winner==='a'?m.a:m.b, l=m.winner==='a'?m.b:m.a;
+      return `<div class="hist">
+        <div class="row" style="margin-bottom:6px">
+          <b style="font-size:15px">Court ${m.court}</b>
+          <span class="mini" style="margin-left:8px">${t(m.at)}</span><span class="sp"></span>
+          ${ri===0?`<button class="btn xs" onclick="undoLastMatch()">Undo</button>`:''}</div>
+        <div class="hrow"><span class="w">${esc(teamName(w))}</span>
+          <span class="sc" style="color:var(--acc)">${ws}</span></div>
+        <div class="hrow"><span style="color:var(--dim)">${esc(teamName(l))}</span>
+          <span class="sc" style="color:var(--dim2)">${ls}</span></div>
+      </div>`;
+    }).join('');
+  }
   if(!S.rounds.length)return `<div class="card"><div class="empty"><span class="ic">📋</span><b>No rounds finished yet</b>Completed rounds appear here and can be edited</div></div>`;
   return S.rounds.slice().reverse().map(r=>`
     <div class="hist">
@@ -1416,6 +1632,24 @@ function viewSettings(){
       <input type="number" min="1" max="12" value="${s.courts}" onchange="setSetting('courts',clamp(+this.value||1,1,12))"></div>
     <button class="btn dan full" style="margin-top:14px" onclick="newSession()">Start a new session</button>
     <button class="btn dan full" style="margin-top:10px" onclick="hardReset()">Reset everything</button>
+  </div>
+  <div class="sec-h">Session style</div>
+  <div class="card">
+    <div class="seg" style="margin-bottom:4px">
+      <button class="${s.style!=='rolling'?'on':''}" onclick="setStyle('sync')">Synchronised</button>
+      <button class="${s.style==='rolling'?'on':''}" onclick="setStyle('rolling')">Rolling</button>
+    </div>
+    <div class="muted" style="padding:10px 2px 2px">${s.style==='rolling'
+      ? `Each court runs on its own. The moment one finishes you enter that result and it refills
+         straight away from the queue \u2014 the other courts carry on untouched.`
+      : `Every court starts and finishes together. You enter all the results, then everyone rotates
+         at once.`}</div>
+    ${s.style==='rolling'?`
+    <div class="sl" style="margin-top:14px"><span class="lab">Rest one match<small>Hold players back for a match after they play \u2014 ignored when a court would otherwise sit empty</small></span>
+      <div class="seg" style="width:130px">
+        <button class="${s.restOne?'on':''}" onclick="setSetting('restOne',true)">On</button>
+        <button class="${!s.restOne?'on':''}" onclick="setSetting('restOne',false)">Off</button>
+      </div></div>`:''}
   </div>
   <div class="sec-h">Scoring</div>
   <div class="card">
@@ -1477,7 +1711,10 @@ function addPlayer(){
   let el=$('#newName');if(!el)return;
   const name=el.value.trim();if(!name)return;
   if(S.players.some(p=>p.name.toLowerCase()===name.toLowerCase())){toast('That name is already in the list',1);return}
-  S.players.push({id:uid(),name,tier:'int',addedRound:roundsDone()+1});
+  // qg = queue games (ordering only, reset on return from away).
+  // games on the leaderboard is derived from history and is never touched.
+  S.players.push({id:uid(),name,tier:'int',addedRound:roundsDone()+1,
+                  away:false,qg:minQueueGames(),lastPlayed:(S.matches||[]).length});
   sortByTier();
   el.value='';
   if(S.current&&!S.current.confirmed)S.current=null;
@@ -1523,6 +1760,19 @@ function setPairing(v){
   if(S.current&&!S.current.confirmed)S.current=null;
   render();
   toast(v==='level'?'Same level \u2014 groups play among themselves':'Social mix \u2014 everyone mixes');
+}
+function setStyle(v){
+  if(S.settings.style===v)return;
+  // Switching with matches in flight would void games people are playing.
+  const live = isRolling()
+    ? (S.courts||[]).some(c=>c&&(c.winner||hasScore(c)||c.entering))
+    : !!(S.current&&S.current.confirmed);
+  if(S.started&&live){toast('Finish the results on court first',1);return}
+  S.settings.style=v;
+  if(v==='rolling'){ S.current=null; S.courts=[]; if(S.started)fillCourts(); }
+  else { S.courts=[]; }
+  sel=null;render();
+  toast(v==='rolling'?'Rolling: courts refill on their own':'Synchronised: courts rotate together');
 }
 function setMode(m){
   if(S.settings.mode===m)return;
@@ -1610,7 +1860,7 @@ function reopenRound(){
   render();
 }
 function pickWinner(i,side){
-  const c=S.current.courts[i];
+  const c=courtAt(i); if(!c)return;
   c.winner=c.winner===side?null:side;
   if(!c.winner){c.winScore=null;c.loseScore=null}
   render();
@@ -1621,7 +1871,8 @@ function setScore(i,v){
   if(!S.settings.allowOverride&&(v<min||v>max)){
     toast(`${isFirstTo()?"Loser's score":'Winning score'} must be ${min}–${max} (admin override is in Settings)`,1);return}
   if(v<0||v>S.settings.total){toast('Score out of range',1);return}
-  applyScore(S.current.courts[i],v);render();
+  const c=courtAt(i); if(!c)return;
+  applyScore(c,v);render();
 }
 function finishRound(){
   const cur=S.current;if(!cur)return;
@@ -1631,6 +1882,226 @@ function finishRound(){
   S.forced={pairs:[],match:null};
   S.current=null;sel=null;window.scrollTo(0,0);
   render();toast(`Round ${S.rounds.length} saved`);
+}
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   ROLLING MODE
+   Courts run independently. A court that finishes refills immediately from
+   the front of the queue; the other courts carry on untouched.
+
+   The queue decides WHO plays. The matchmaker only decides HOW they pair up.
+   That separation is the whole point: nobody is ever skipped because a
+   tidier match existed, which is what makes it defensible at courtside.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+
+function onCourtSet(){
+  const s = new Set();
+  (S.courts || []).forEach(c => { if(c) [...c.a, ...c.b].forEach(i => s.add(i)); });
+  return s;
+}
+
+/* Queue order: fewest queue-games first, then whoever has waited longest.
+   `qg` is NOT the player's real game count -- see awaySet(). `lastPlayed`
+   is the match index they last came off, so a smaller number means a
+   longer wait. */
+function queueOrder(){
+  const on = onCourtSet();
+  return present()
+    .filter(p => !on.has(p.id))
+    .sort((x, y) => (x.qg || 0) - (y.qg || 0)
+                 || (x.lastPlayed || 0) - (y.lastPlayed || 0)
+                 || S.players.indexOf(x) - S.players.indexOf(y))
+    .map(p => p.id);
+}
+
+/* Best of the three ways to split four players into two pairs. Reuses the
+   same ideas as the round optimiser: avoid recent partners, keep the two
+   sides close in strength. */
+function pairFour(ids, st, str){
+  const SPLITS = [[[0,1],[2,3]], [[0,2],[1,3]], [[0,3],[1,2]]];
+  const Wp = 55 * (S.settings.partnerStrict / 3);
+  const Wb = .85 * (S.settings.balance / 3) * (isCompetitive() ? 1.5 : 1);
+  const n  = S.matches ? S.matches.length : 0;
+
+  const teamCost = (x, y) => {
+    const s = st[x] || {partners:{}, lastPartner:{}};
+    let p = Math.random() * 2;                       // tiny jitter: variety between equals
+    const c = s.partners[y] || 0;
+    if(c) p += Wp * (c * c * 3.2);
+    const lp = s.lastPartner[y];
+    if(lp != null) p += Wp * Math.max(0, 4 - (n - lp)) * 2.6;
+    return p;
+  };
+
+  let best = null;
+  SPLITS.forEach(([ai, bi]) => {
+    const a = [ids[ai[0]], ids[ai[1]]], b = [ids[bi[0]], ids[bi[1]]];
+    const d = Math.abs((str[a[0]] + str[a[1]]) - (str[b[0]] + str[b[1]]));
+    let opp = 0;
+    const Wo = 5 * (S.settings.oppStrict / 3);
+    a.forEach(x => b.forEach(y => {
+      const s = st[x] || {opps:{}, lastOpp:{}};
+      const o = s.opps[y] || 0;
+      if(o) opp += Wo * (o * o);
+      const lo = s.lastOpp[y];
+      if(lo != null) opp += Wo * Math.max(0, 3 - (n - lo)) * 1.2;
+    }));
+    const cost = teamCost(a[0], a[1]) + teamCost(b[0], b[1]) + opp + Wb * (d + d * d / 40);
+    if(!best || cost < best.cost) best = { a, b, cost };
+  });
+  return best;                                      // {a, b, cost}
+}
+
+/* Choose WHICH four play, then how they pair.
+
+   Fairness is absolute: anyone with fewer queue-games than the fourth in
+   line is guaranteed a place. But players on the SAME number of games are
+   interchangeable, and that is the freedom used to break up cliques --
+   among equals, prefer the four who have seen least of each other.
+
+   Without this the tie-break was chronological, so the four who finished
+   together were reselected together, and 8 players on 2 courts never mixed. */
+function chooseFour(order, st, str){
+  if(order.length < 4) return null;
+  const n  = S.matches ? S.matches.length : 0;
+  const qg = id => (P(id) ? (P(id).qg || 0) : 0);
+  const cut  = qg(order[3]);
+  const must = order.filter(id => qg(id) <  cut);
+  let   flex = order.filter(id => qg(id) === cut);
+  const need = 4 - must.length;
+  if(need <= 0)   return pairFour(must.slice(0, 4), st, str);
+  if(flex.length <= need) return pairFour(must.concat(flex).slice(0, 4), st, str);
+
+  flex = flex.slice(0, 8);                          // keep the search small
+  let best = null;
+  const pick = (start, acc) => {
+    if(acc.length === need){
+      const four = must.concat(acc);
+      const r = pairFour(four, st, str);
+      // Among players on equal games, variety is the tie-break -- but not an
+      // unlimited one. Someone who has sat out several rotations should be
+      // chosen over a slightly fresher pairing, or the optimiser can keep
+      // preferring the same faces and the spread quietly widens.
+      const wait = four.reduce((t,id)=>{
+        const pl = P(id); return t + (n - (pl ? (pl.lastPlayed||0) : 0));
+      },0);
+      const cost = r.cost - 25 * wait;   // 25 measured best across 8-16 players
+      if(!best || cost < best.cost) best = {a:r.a, b:r.b, cost};
+      return;
+    }
+    for(let i = start; i < flex.length; i++) pick(i + 1, acc.concat(flex[i]));
+  };
+  pick(0, []);
+  return best;
+}
+
+/* Fill one empty court from the front of the queue. Returns false when
+   there are not four people available, which is a normal state, not an
+   error -- the court simply waits. */
+function fillCourt(i, justFinished){
+  let order = queueOrder();
+
+  // Clique guard.
+  // With exactly courts x 4 players nobody is ever waiting, so a court that
+  // finishes can only refill with the same four -- who then play together
+  // all evening and never meet anyone from the other courts. Measured: at
+  // 8 players on 2 courts each person met 3 of the other 7, all night.
+  // So if the only candidates are the four who just left this court, and
+  // another court is still playing, hold this one empty until that court
+  // finishes. Both are then redrawn from the full pool. Costs a short wait;
+  // buys an actual mabar instead of two sealed groups.
+  if(justFinished && justFinished.length === 4 && order.length === 4){
+    const jf = new Set(justFinished);
+    if(order.every(id => jf.has(id)) &&
+       S.courts.some((c, j) => c && j !== i)){
+      S.courts[i] = null;
+      return false;
+    }
+  }
+
+  // "Rest one match": push whoever just came off this court to the back of
+  // the candidate list -- but never leave a court empty for it. With ten
+  // players and two courts there often are not four other people, and an
+  // empty court is worse than a short rest.
+  if(S.settings.restOne && justFinished && justFinished.length){
+    const jf = new Set(justFinished);
+    const fresh = order.filter(id => !jf.has(id));
+    const used  = order.filter(id =>  jf.has(id));
+    if(fresh.length >= 4) order = fresh.concat(used);
+  }
+
+  if(order.length < 4){ S.courts[i] = null; return false; }
+
+  const st = stats(), str = strengths(st);
+  const got = chooseFour(order, st, str);
+  if(!got){ S.courts[i] = null; return false; }
+  S.courts[i] = { a: got.a, b: got.b, winner:null, winScore:null, loseScore:null };
+  return true;
+}
+
+/* Fill every empty court, best-filled first. */
+function fillCourts(justFinished){
+  const want = activeCourts();
+  S.courts = S.courts || [];
+  S.courts.length = Math.max(S.courts.length, want);
+  for(let i = 0; i < S.courts.length; i++){
+    if(i >= want){ S.courts[i] = null; continue; }
+    if(!S.courts[i]) fillCourt(i, justFinished);
+  }
+  while(S.courts.length && S.courts[S.courts.length - 1] == null &&
+        S.courts.length > want) S.courts.pop();
+}
+
+/* A court is done: record it, send those four to the back of the queue,
+   and refill that court straight away. */
+function finishMatch(i){
+  const c = S.courts[i];
+  if(!c) return;
+  if(!c.winner || !hasScore(c)){ toast('Enter a winner and score for this court', 1); return; }
+
+  S.matches = S.matches || [];
+  S.matches.push({
+    at: Date.now(), court: i + 1,
+    a: [...c.a], b: [...c.b],
+    winner: c.winner, winScore: c.winScore, loseScore: lossOf(c)
+  });
+
+  const played = [...c.a, ...c.b];
+  const n = S.matches.length;
+  played.forEach(id => {
+    const p = P(id);
+    if(p){ p.qg = (p.qg || 0) + 1; p.lastPlayed = n; }
+  });
+
+  S.courts[i] = null;
+  fillCourts(played);
+  sel = null;
+  render();
+  toast('Match saved');
+}
+
+/* Away. The host decides; the system simply stops picking them.
+   On return a player rejoins level with whoever present has played least,
+   so a late arrival does not play four in a row while the regulars watch.
+   Their true `games` count, and therefore the leaderboard, is untouched. */
+function setAway(id, away){
+  const p = P(id); if(!p) return;
+  p.away = !!away;
+  if(!away){
+    const others = present().filter(x => x.id !== id);
+    p.qg = others.length ? Math.min(...others.map(x => x.qg || 0)) : 0;
+    p.lastPlayed = S.matches ? S.matches.length : 0;
+  }
+  if(isRolling() && S.started) fillCourts();
+  render();
+  toast(away ? p.name + ' is away' : p.name + ' is back');
+}
+
+function minQueueGames(){
+  const o = (S.players||[]).filter(p=>!p.away);
+  return o.length ? Math.min(...o.map(p=>p.qg||0)) : 0;
 }
 
 /* ---- forced pairings ---- */
