@@ -1,5 +1,5 @@
 /* Offline cache — the courts usually have worse signal than the car park. */
-const V = 'mabyo-v30';
+const V = 'mabyo-v31';
 
 // Note: './index.html' is deliberately NOT here. Cloudflare 308-redirects it
 // to './', and a redirected response used for a navigation is a hard error in
