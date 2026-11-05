@@ -169,10 +169,6 @@ nav button.on{color:var(--court);background:rgba(14,138,79,.11)}
 .tier-body{display:flex;flex-direction:column;gap:9px;min-height:54px}
 .tier-empty{border:2px dashed var(--line2);border-radius:var(--r-sm);padding:14px;text-align:center;
   color:var(--ink3);font-size:13px;font-weight:700}
-.court.onhold{opacity:.74;filter:grayscale(.5)}
-.court.onhold .court-h{background:var(--ink3)}
-.tag.hold{background:rgba(255,255,255,.22);color:#fff;font-size:10.5px;font-weight:900;
-  letter-spacing:.06em;padding:3px 9px;border-radius:999px}
 .isaway{opacity:.55}
 .awaytag{margin-left:7px;font-size:10.5px;font-weight:900;letter-spacing:.06em;
   text-transform:uppercase;color:var(--ink3);background:var(--line);
@@ -449,7 +445,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v31';   // bump together with V in sw.js
+const BUILD='v32';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -1152,34 +1148,6 @@ function viewRolling(st){
   };
 
   const courtCard = (c, i) => {
-    if(isHeld(c)){
-      const row = id => {
-        const out = onOtherCourt(id, i);
-        const s2 = st[id] || {games:0};
-        return `<button class="chip held ${sel===id?'sel':''}" data-pid="${id}" onclick="tapRolling('${id}')">
-          <i class="tdot" data-tier="${tierOf(P(id))}"></i>
-          <span>${esc(nameOf(id))}</span>
-          <span class="st">${out ? '\u23f3 still playing' : '\u2713 ready'} \u00b7 ${s2.games||0} ${(s2.games||0)===1?'game':'games'}</span>
-        </button>`;
-      };
-      const waitingOn = [...c.a, ...c.b].filter(id => onOtherCourt(id, i));
-      return `<div class="court onhold">
-        <div class="court-h">
-          <span class="cn">Court ${i+1}</span>
-          <span class="tag hold">On hold</span>
-        </div>
-        <div class="court-b">
-          <div class="note" style="margin:0 0 12px">Waiting for
-            <b>${waitingOn.map(id=>esc(nameOf(id))).join(', ')}</b> to finish, so this court
-            is at one level instead of mixing far apart. It starts on its own.</div>
-          <div class="team"><div class="tnames">${c.a.map(row).join('')}</div></div>
-          <div class="vs"><span>VS</span></div>
-          <div class="team"><div class="tnames">${c.b.map(row).join('')}</div></div>
-          <button class="btn full" style="margin-top:12px" onclick="playNow(${i})">Play now with who\u2019s free</button>
-          <div class="muted" style="margin-top:8px;text-align:center">Or tap a name above, then someone in the queue, to swap them.</div>
-        </div>
-      </div>`;
-    }
     if(!c){
       const held = queue.length >= 4;
       return `<div class="court"><div class="court-h"><span class="cn">Court ${i+1}</span></div>
@@ -1930,10 +1898,7 @@ function finishRound(){
 
 function onCourtSet(){
   const s = new Set();
-  // A held court has not started, so its players are not committed: they are
-  // either still finishing elsewhere or standing free. Counting them as
-  // 'on court' would hide them from the queue and from other courts.
-  (S.courts || []).forEach(c => { if(c && !c.hold) [...c.a, ...c.b].forEach(i => s.add(i)); });
+  (S.courts || []).forEach(c => { if(c) [...c.a, ...c.b].forEach(i => s.add(i)); });
   return s;
 }
 
@@ -2088,92 +2053,11 @@ function chooseFour(order, st, str){
 }
 
 
-/* ── Held courts ───────────────────────────────────────────────────────
-   Sometimes the four people free right now make a bad match -- two
-   Advanced with nobody at their level, so the court would pair them with
-   Beginners. Often the right answer is to wait a few minutes for the
-   players who ARE at their level to finish.
-
-   Only the host knows whether that other court is on match point, so the
-   app recommends and the host decides. Two guards keep this honest:
-     - only hold when the available match spans 2+ tiers. Holding to turn a
-       good match into a slightly better one costs real playing time.
-     - never hold when four or more people are waiting who have played LESS
-       than the players being waited for. An empty court watched by four
-       people is worse than an uneven game. */
-
 const TIER_ORD = {adv:0, upp:1, int:2, beg:3};
 const tierGap = ids => {
   const t = ids.map(id => TIER_ORD[tierOf(P(id))] ?? 2);
   return Math.max(...t) - Math.min(...t);
 };
-const isHeld = c => !!(c && c.hold);
-const onOtherCourt = (id, i) =>
-  (S.courts||[]).some((c,j) => c && j !== i && !c.hold && [...c.a,...c.b].includes(id));
-
-/* The best four from EVERYONE present -- including people mid-match --
-   built around the players who are free and have played least. */
-function idealCourt(i, st, str){
-  const spoken = new Set();
-  (S.courts||[]).forEach((c,j) => {
-    if(c && c.hold && j !== i) [...c.a, ...c.b].forEach(x => spoken.add(x));
-  });
-  const pool = present().filter(p => !spoken.has(p.id)).map(p => p.id);
-  if(pool.length < 4) return null;
-
-  const free  = queueOrder().filter(id => !spoken.has(id));
-  if(!free.length) return null;
-  const seeds = free.slice(0, 2);            // who most deserves this court
-
-  const rank = {}; S.players.forEach((p,k) => rank[p.id] = k);
-  const byRank = pool.slice().sort((a,b) => rank[a] - rank[b]);
-  let best = null;
-  for(let k = 0; k + 4 <= byRank.length; k++){
-    const four = byRank.slice(k, k + 4);
-    if(!seeds.every(s => four.includes(s))) continue;
-    const r = pairFour(four, st, str);
-    const qsum = four.reduce((t,id) => t + (P(id) ? (P(id).qg||0) : 0), 0);
-    // Without a tier term this cannot tell four Advanced from two Advanced
-    // and two Beginners -- the balance term rates both as even, because the
-    // totals cancel. Tier distance is the whole point of the ideal court.
-    const gap = tierGap(four);
-    const cost = qsum * 1000 + gap * gap * 800 + r.cost;
-    if(!best || cost < best.cost) best = {a:r.a, b:r.b, four, cost};
-  }
-  return best;
-}
-
-/* Would holding this court leave too many people watching it? */
-function holdIsFair(ideal, i){
-  const waitedFor = ideal.four.filter(id => onOtherCourt(id, i));
-  if(!waitedFor.length) return true;                 // nobody to wait for
-  const qg = id => (P(id) ? (P(id).qg || 0) : 0);
-  const floor = Math.min(...waitedFor.map(qg));
-  const starved = queueOrder().filter(id => qg(id) < floor).length;
-  return starved < 4;
-}
-
-/* Release any held court whose players have all finished. */
-function releaseHolds(){
-  (S.courts||[]).forEach((c,i) => {
-    if(!isHeld(c)) return;
-    const stillOut = [...c.a, ...c.b].some(id => onOtherCourt(id, i));
-    if(!stillOut){ delete c.hold; }
-  });
-}
-
-/* Host override: ignore the recommendation and play with whoever is free. */
-function playNow(i){
-  const c = S.courts[i];
-  if(!isHeld(c)) return;
-  S.courts[i] = null;
-  const st = stats(), str = strengths(st);
-  const got = chooseFour(queueOrder(), st, str);
-  if(!got){ toast('Not enough free players yet', 1); S.courts[i] = c; return; }
-  S.courts[i] = {a:got.a, b:got.b, winner:null, winScore:null, loseScore:null};
-  render(); toast('Playing with who is free');
-}
-
 /* Fill one empty court from the front of the queue. Returns false when
    there are not four people available, which is a normal state, not an
    error -- the court simply waits. */
@@ -2215,17 +2099,6 @@ function fillCourt(i, justFinished){
   const got = chooseFour(order, st, str);
   if(!got){ S.courts[i] = null; return false; }
 
-  // Is the match we could start right now actually bad? Only then is it
-  // worth considering a wait.
-  if(S.settings.pairing === 'level' && !window.__NOHOLD && tierGap([...got.a, ...got.b]) >= 2){
-    const ideal = idealCourt(i, st, str);
-    if(ideal && tierGap(ideal.four) <= 1 && holdIsFair(ideal, i)){
-      S.courts[i] = { a: ideal.a, b: ideal.b, hold:true,
-                      winner:null, winScore:null, loseScore:null };
-      return true;
-    }
-  }
-
   S.courts[i] = { a: got.a, b: got.b, winner:null, winScore:null, loseScore:null };
   return true;
 }
@@ -2234,7 +2107,6 @@ function fillCourt(i, justFinished){
 function fillCourts(justFinished){
   const want = activeCourts();
   S.courts = S.courts || [];
-  releaseHolds();
   S.courts.length = Math.max(S.courts.length, want);
   for(let i = 0; i < S.courts.length; i++){
     if(i >= want){ S.courts[i] = null; continue; }
