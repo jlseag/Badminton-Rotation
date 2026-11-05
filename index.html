@@ -445,7 +445,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v32';   // bump together with V in sw.js
+const BUILD='v33';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -454,7 +454,8 @@ const uid=()=>'p'+Math.random().toString(36).slice(2,9);
 /* ---------------- state ---------------- */
 function defState(){return{
   v:1, started:false, ended:false,
-  players:[],                 // {id,name,addedRound}  — array order == Initial Skill Rank
+  players:[],                 // {id,name,tier,away,qg,lastPlayed} — array order IS the
+                              // skill ranking, and the only thing that sets level
   rounds:[],                  // Synchronised: finished rounds
   current:null,               // Synchronised: draft/active round
   courts:[],                  // Rolling: one independent match per court (or null)
@@ -598,31 +599,21 @@ const matchesDone=()=> isRolling() ? (S.matches||[]).length
   : S.rounds.reduce((n,r)=>n+(r.courts||[]).length,0);
 const isCompetitive=()=>roundsDone()>=S.settings.earlyRounds;
 
-/* ---------------- current strength score (0-100) ------------------------- */
+/* ------------- skill score, from placement alone (5-95) ------------------ */
 function strengths(st){
-  st=st||stats();
-  const n=S.players.length, out={};
-  const rd=roundsDone(), er=Math.max(1,S.settings.earlyRounds);
-  let phaseW = rd<er ? .7 : rd<er*2 ? .4 : .2;                 // initial-skill weight by phase
-  S.players.forEach((p,i)=>{
-    const init = n<2?50:100-100*i/(n-1);                        // rank 1 => 100, last => 0
-    const s=st[p.id];
-    if(!s||!s.games){out[p.id]=init;return}
-    const recent=s.scores.slice(-4), rAvg=recent.reduce((a,b)=>a+b,0)/recent.length;
-    const blend=.65*s.avg+.35*rAvg;                             // points/game, recency-weighted
-    // a typical score: half the combined total, or roughly 60% of the target in first-to
-    const par=isFirstTo()?S.settings.total*.6:S.settings.total/2;
-    const perf=clamp((blend-par)/(par*.45)*50+50,0,100);          // par == average == 50
-    const w=clamp(Math.max(phaseW,1-s.games/4),0,1);             // few games => trust initial rank more
-    out[p.id]=w*init+(1-w)*perf;
+  // Level comes from WHERE A PLAYER SITS IN THE SKILL ORDER, and nothing
+  // else. Points are a scoreboard between friends, not a rating: a beginner
+  // who has a good night is still a beginner, and should not start being
+  // fed to the Advanced court because the numbers flattered them.
+  //
+  // This used to blend placement with points per game, and the blend DECAYED
+  // -- placement was 70% early and only 20% late in a session -- so by the
+  // end of a night the matchmaker was ranking people almost entirely on
+  // score. The host owns the order; drag someone to change their level.
+  const n = S.players.length, out = {};
+  S.players.forEach((p, i) => {
+    out[p.id] = n < 2 ? 50 : 95 - 90 * i / (n - 1);   // first => 95, last => 5
   });
-  // rescale to a stable 5-95 spread so balancing keeps the same "bite" all session
-  const vals=Object.values(out);
-  if(vals.length>1){
-    const mn=Math.min.apply(null,vals), mx=Math.max.apply(null,vals);
-    if(mx-mn>0.01)Object.keys(out).forEach(k=>out[k]=5+90*(out[k]-mn)/(mx-mn));
-    else Object.keys(out).forEach(k=>out[k]=50);
-  }
   return out;
 }
 
@@ -1416,7 +1407,8 @@ function viewPlayers(st){
   </div>
   <div class="sec-h">Skill order</div>
   <div class="muted" style="margin:-4px 4px 12px">Advanced is strongest. Drag the <b>\u2261 handle</b> to move someone \u2014 between groups or within one.
-    Tap a name to rename, re-group or remove. The number is their overall rank.</div>
+    Tap a name to rename, re-group or remove. The number is their overall rank \u2014
+    this order is what decides match levels. Points are just the scoreboard.</div>
   ${tierList()}`;
 }
 
