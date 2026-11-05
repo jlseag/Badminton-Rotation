@@ -440,7 +440,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v39';   // bump together with V in sw.js
+const BUILD='v40';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -455,6 +455,7 @@ function defState(){return{
   current:null,               // Synchronised: draft/active round
   courts:[],                  // Rolling: one independent match per court (or null)
   matches:[],                 // Rolling: finished matches, oldest first
+  recentQuads:{},             // foursome -> match index it last played, for variety
   forced:{pairs:[],match:null},
   locks:[],                   // [[idA,idB],...] — locked partners, kept every round until unlocked
   settings:{
@@ -480,6 +481,7 @@ function load(){
         if(o.settings.style===undefined)S.settings.style='sync';
       }
       S.courts=Array.isArray(o.courts)?o.courts:[];
+      S.recentQuads=(o.recentQuads&&typeof o.recentQuads==='object')?o.recentQuads:{};
       S.matches=Array.isArray(o.matches)?o.matches:[];
       // fields added with Away; absent on anything saved earlier
       S.players.forEach(p=>{
@@ -2002,6 +2004,30 @@ function queueOrder(){
     .map(p => p.id);
 }
 
+/* Foursome memory.
+   With six Advanced and four to a court there are few combinations, so the
+   same quartet reassembles again and again -- measured at 20 players: eight
+   distinct foursomes across a whole session, one of them nine times, and a
+   player meeting only three of the five others at his level all night.
+   Remembering who has just played together, and charging for a repeat,
+   breaks that up. The charge fades over QUAD_MEM matches so it nudges
+   rather than forbids. */
+const QUAD_MEM = 12, QUAD_W = 700;
+const quadKey = ids => ids.slice().sort().join('|');
+function quadStale(ids){
+  const n = (S.matches||[]).length;
+  const last = (S.recentQuads||{})[quadKey(ids)];
+  return last == null ? 0 : Math.max(0, QUAD_MEM - (n - last));
+}
+function rememberQuad(ids){
+  const n = (S.matches||[]).length;
+  S.recentQuads = S.recentQuads || {};
+  S.recentQuads[quadKey(ids)] = n;
+  Object.keys(S.recentQuads).forEach(k => {
+    if(n - S.recentQuads[k] > QUAD_MEM) delete S.recentQuads[k];   // keep it small
+  });
+}
+
 /* Best of the three ways to split four players into two pairs. Reuses the
    same ideas as the round optimiser: avoid recent partners, keep the two
    sides close in strength. */
@@ -2099,6 +2125,7 @@ function chooseFour(order, st, str){
       const cost = qsum * 1000
                  + (four.includes(front) ? 0 : 2500)
                  + gap * gap * 800
+                 + quadStale(four) * QUAD_W
                  + r.cost - 25 * wait;
       if(!best || cost < best.cost) best = {a:r.a, b:r.b, cost};
     }
@@ -2128,7 +2155,7 @@ function chooseFour(order, st, str){
       const wait = four.reduce((t,id)=>{
         const pl = P(id); return t + (n - (pl ? (pl.lastPlayed||0) : 0));
       },0);
-      const cost = r.cost + spreadCost(four) - 25 * wait;
+      const cost = r.cost + spreadCost(four) + quadStale(four) * QUAD_W - 25 * wait;
       if(!best || cost < best.cost) best = {a:r.a, b:r.b, cost};
       return;
     }
@@ -2175,6 +2202,7 @@ function fillCourt(i, justFinished){
   if(!got){ S.courts[i] = null; return false; }
 
   S.courts[i] = { a: got.a, b: got.b, winner:null, winScore:null, loseScore:null };
+  rememberQuad([...got.a, ...got.b]);
   return true;
 }
 
