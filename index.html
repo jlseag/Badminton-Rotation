@@ -440,7 +440,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v41';   // bump together with V in sw.js
+const BUILD='v42';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -2379,6 +2379,16 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
     }
     return d;
   }
+  /* The session this device is signed in on. GoTrue puts session_id in the
+     access token; reporting it lets the dashboard end THIS device's session
+     without touching the host's other devices. */
+  function sessionId(){
+    try{
+      const b = A.access_token.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
+      return JSON.parse(atob(b)).session_id || null;
+    }catch(_){ return null; }
+  }
+
   async function deviceLabel(){
     const u = navigator.userAgent;
     let os = /iPhone/.test(u) ? 'iPhone' : /iPad/.test(u) ? 'iPad'
@@ -2496,16 +2506,23 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
     // Heartbeat, not a tracker. Every five minutes while the app is open is
     // enough for the dashboard to show who is active; switching tabs twenty
     // times a minute should not write twenty rows.
-    if(Date.now() - lastTouch < 60000) return;
+    if(Date.now() - lastTouch < 50000) return;
     lastTouch = Date.now();
     const now = new Date().toISOString();
     try{
-      await sbFetch('/rest/v1/devices?on_conflict=host_id,device_key', {
+      const dr = await sbFetch('/rest/v1/devices?on_conflict=host_id,device_key', {
         method:'POST',
-        headers:{ Prefer:'resolution=merge-duplicates' },
+        headers:{ Prefer:'resolution=merge-duplicates,return=representation' },
         body: JSON.stringify({ host_id:A.id, device_key:deviceKey(),
+                               session_id:sessionId(),
                                label:(await deviceLabel()), last_seen:now })
       });
+      // The row comes back, so the same request that says "still here" also
+      // tells us whether we are still welcome. No extra round trip.
+      if(dr.ok){
+        const back = await dr.json().catch(() => null);
+        if(back && back[0] && back[0].revoked){ removedHere(); return; }
+      }
       await sbFetch('/rest/v1/hosts?id=eq.'+A.id, {
         method:'PATCH', body: JSON.stringify({ last_seen_at: now }) });
     }catch(_){}
@@ -2537,6 +2554,16 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
   function openApp(){
     setGate(false); acctBtn.hidden = false;
     touch();
+  }
+
+  /* The organiser removed this device. The session is already dead server
+     side; all that is left is to stop pretending otherwise. Nothing local is
+     deleted -- the roster and results stay, and signing back in restores them. */
+  function removedHere(){
+    A = null; C = null;
+    drop(AUTH_LS); drop('badminton_ent_v1');
+    showSignIn('Access on this device was removed by the organiser. '+
+               'Sign in again, or contact them.');
   }
 
   function signOut(){
@@ -2654,6 +2681,9 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
   // Re-ask periodically and whenever the phone comes back to the app, so a
   // revoked plan bites within minutes rather than at the next cold start.
   setInterval(() => { if(A && gate.hidden) boot(false); }, RECHECK_MS);
+  // The heartbeat doubles as the removal check, so a device that has had its
+  // access removed falls to the sign-in screen within about a minute.
+  setInterval(() => { if(A && gate.hidden) touch(); }, 60000);
   document.addEventListener('visibilitychange', () => {
     if(document.visibilityState === 'visible' && A) boot(false);
   });
