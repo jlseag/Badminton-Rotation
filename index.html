@@ -440,7 +440,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v38';   // bump together with V in sw.js
+const BUILD='v39';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -459,7 +459,7 @@ function defState(){return{
   locks:[],                   // [[idA,idB],...] — locked partners, kept every round until unlocked
   settings:{
     courts:2, mode:'firstto', total:21, earlyRounds:4,
-    style:'rolling', restOne:false, scoring:'wins',
+    style:'rolling', scoring:'wins',
     partnerStrict:4, oppStrict:3, balance:3, restFair:4,
     pairing:'level', rankBy:'points', allowOverride:false, noise:3
   }
@@ -1709,12 +1709,6 @@ function viewSettings(){
          straight away from the queue \u2014 the other courts carry on untouched.`
       : `Every court starts and finishes together. You enter all the results, then everyone rotates
          at once.`}</div>
-    ${s.style==='rolling'?`
-    <div class="sl" style="margin-top:14px"><span class="lab">Rest one match<small>Hold players back for a match after they play \u2014 ignored when a court would otherwise sit empty</small></span>
-      <div class="seg" style="width:130px">
-        <button class="${s.restOne?'on':''}" onclick="setSetting('restOne',true)">On</button>
-        <button class="${!s.restOne?'on':''}" onclick="setSetting('restOne',false)">Off</button>
-      </div></div>`:''}
   </div>
   <div class="sec-h">Scoring</div>
   <div class="card">
@@ -2172,17 +2166,6 @@ function fillCourt(i, justFinished){
       S.courts[i] = null;
       return false;
     }
-  }
-
-  // "Rest one match": push whoever just came off this court to the back of
-  // the candidate list -- but never leave a court empty for it. With ten
-  // players and two courts there often are not four other people, and an
-  // empty court is worse than a short rest.
-  if(S.settings.restOne && justFinished && justFinished.length){
-    const jf = new Set(justFinished);
-    const fresh = order.filter(id => !jf.has(id));
-    const used  = order.filter(id =>  jf.has(id));
-    if(fresh.length >= 4) order = fresh.concat(used);
   }
 
   if(order.length < 4){ S.courts[i] = null; return false; }
