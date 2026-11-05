@@ -440,7 +440,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v37';   // bump together with V in sw.js
+const BUILD='v38';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -459,7 +459,7 @@ function defState(){return{
   locks:[],                   // [[idA,idB],...] — locked partners, kept every round until unlocked
   settings:{
     courts:2, mode:'firstto', total:21, earlyRounds:4,
-    style:'rolling', restOne:false,
+    style:'rolling', restOne:false, scoring:'wins',
     partnerStrict:4, oppStrict:3, balance:3, restFair:4,
     pairing:'level', rankBy:'points', allowOverride:false, noise:3
   }
@@ -543,6 +543,8 @@ function pruneLocks(){S.locks=S.locks.filter(l=>l.every(id=>P(id)))}
 /* Rolling vs Synchronised, and who is actually here. Declared high up
    because stats() and roundsDone() both depend on them. */
 const isRolling = () => S.settings.style === 'rolling';
+// Wins only: the host taps who won and nothing else. No scores anywhere.
+const winsOnly  = () => S.settings.scoring === 'wins';
 const present   = () => S.players.filter(p => !p.away);
 
 function stats(){
@@ -563,11 +565,14 @@ function stats(){
         t.forEach(x=>o.forEach(y=>{if(m[x]&&m[y]){m[x].opps[y]=(m[x].opps[y]||0)+1;m[x].lastOpp[y]=rd.n}}));
       });
       if(!full)return;
-      if(c.winner&&hasScore(c)){
-        const ws=c.winScore, ls=lossOf(c);
+      // A winner alone is enough. Gating this on a score meant Wins only
+      // counted nothing at all -- no games, no wins, an empty leaderboard.
+      if(c.winner){
+        const scored=hasScore(c);
+        const ws=scored?c.winScore:0, ls=scored?lossOf(c):0;
         const w=c.winner==='a'?c.a:c.b, l=c.winner==='a'?c.b:c.a;
-        w.forEach(id=>{const s=m[id];if(!s)return;s.pts+=ws;s.games++;s.wins++;s.scores.push(ws);s.lastPlayed=rd.n});
-        l.forEach(id=>{const s=m[id];if(!s)return;s.pts+=ls;s.games++;s.losses++;s.scores.push(ls);s.lastPlayed=rd.n});
+        w.forEach(id=>{const s=m[id];if(!s)return;s.pts+=ws;s.games++;s.wins++;if(scored)s.scores.push(ws);s.lastPlayed=rd.n});
+        l.forEach(id=>{const s=m[id];if(!s)return;s.pts+=ls;s.games++;s.losses++;if(scored)s.scores.push(ls);s.lastPlayed=rd.n});
       }
     });
   };
@@ -994,14 +999,16 @@ function viewGame(st){
     S.current=r.round;
   }
   const cur=S.current, str=strengths(st), draft=!cur.confirmed;
-  const allDone=cur.courts.every(c=>c.winner&&hasScore(c));
+  const allDone=cur.courts.every(c=>c.winner&&(winsOnly()||hasScore(c)));
 
   const chip=(id,loc)=>{
     const s=st[id]||{pts:0,games:0};
     return `<button class="chip ${sel===id?'sel':''}" data-pid="${id}" ${draft&&!loc?'draggable="true"':''}
       onclick="${draft?(loc?`toast('This court is locked','1')`:`tapPlayer('${id}')`):'null'}">
       <i class="tdot" data-tier="${tierOf(P(id))}"></i>
-      <span>${esc(nameOf(id))}</span><span class="st">${s.pts} pts · ${s.games} ${s.games===1?'game':'games'}</span></button>`;
+      <span>${esc(nameOf(id))}</span><span class="st">${winsOnly()
+        ? `${s.wins||0} ${(s.wins||0)===1?'win':'wins'} · ${s.games} ${s.games===1?'game':'games'}`
+        : `${s.pts} pts · ${s.games} ${s.games===1?'game':'games'}`}</span></button>`;
   };
   const teamBlock=(c,side,ci)=>{
     const t=c[side], lk=isLockedPair(t[0],t[1]), loc=c.locked||lk;
@@ -1050,7 +1057,7 @@ function viewGame(st){
         <div class="vs"><span>VS</span></div>
         ${teamBlock(c,'b',i)}
         ${b<70&&draft?'<div class="note" style="margin:10px 0 0">⚠️ This matchup may be uneven — you can still proceed.</div>':''}
-        ${!draft?scoreUI(c,i):''}
+        ${!draft?(winsOnly()?'':scoreUI(c,i)):''}
       </div>
     </div>`}).join('')}
 
@@ -1141,7 +1148,9 @@ function viewRolling(st){
     const s = st[id] || {pts:0, games:0};
     return `<button class="chip ${sel===id?'sel':''}" data-pid="${id}" onclick="tapRolling('${id}')">
       <i class="tdot" data-tier="${tierOf(P(id))}"></i>
-      <span>${esc(nameOf(id))}</span><span class="st">${s.pts} pts · ${s.games} ${s.games===1?'game':'games'}</span></button>`;
+      <span>${esc(nameOf(id))}</span><span class="st">${winsOnly()
+        ? `${s.wins||0} ${(s.wins||0)===1?'win':'wins'} · ${s.games} ${s.games===1?'game':'games'}`
+        : `${s.pts} pts · ${s.games} ${s.games===1?'game':'games'}`}</span></button>`;
   };
 
   const team = (c, side, i) => {
@@ -1167,7 +1176,7 @@ function viewRolling(st){
     }
     const b = balanceOf(c, str), lbl = b>=85?'🟢 Very balanced':b>=70?'🟡 Fair':'🔴 Uneven';
     const col = b>=85?'var(--acc)':b>=70?'var(--warn)':'var(--bad)';
-    const ready = c.winner && hasScore(c);
+    const ready = c.winner && (winsOnly() || hasScore(c));
     return `<div class="court">
       <div class="court-h">
         <span class="cn">Court ${i+1}${S.settings.pairing==='level'?`<span class="ctier">${courtTiers(c)}</span>`:''}</span>
@@ -1181,9 +1190,9 @@ function viewRolling(st){
         ${!c.entering
           ? `<button class="btn pri full" style="margin-top:12px" onclick="beginResult(${i})">Finish match</button>
              <button class="btn gho full" style="margin-top:8px" onclick="reshuffleCourt(${i})">↻ Redraw this court</button>`
-          : `${scoreUI(c,i)}
+          : `${winsOnly()?'<div class="note" style="margin:0 0 4px">Tap the team that won.</div>':scoreUI(c,i)}
              <button class="btn pri full" style="margin-top:12px" onclick="finishMatch(${i})" ${ready?'':'disabled'}>
-               Save result${ready?'':' · pick a winner and score'}</button>
+               Save result${ready?'':(winsOnly()?' \u00b7 tap the winner':' \u00b7 pick a winner and score')}</button>
              <button class="btn gho full" style="margin-top:8px" onclick="cancelResult(${i})">← Back</button>`}
       </div>
     </div>`;
@@ -1333,6 +1342,7 @@ function forcedUI(){
 
 /* ---------------- leaderboard ------------------------------------------- */
 function rankKey(s){
+  if(winsOnly())return[s.wins,s.wr,s.games];
   switch(S.settings.rankBy){
     case 'avg':return[s.avg,s.pts,s.wins];
     case 'wins':return[s.wins,s.pts,s.avg];
@@ -1353,21 +1363,22 @@ function viewBoard(st){
     Finish round 1 and the table fills in</div></div>`;
   const avgG=S.players.reduce((a,p)=>a+st[p.id].games,0)/S.players.length;
   const resting=new Set(S.current?S.current.resting:[]);
-  const label={points:'Total Points',avg:'Avg / Game',wins:'Wins',winpct:'Win %'}[S.settings.rankBy];
+  const label=winsOnly()?'Wins':{points:'Total Points',avg:'Avg / Game',wins:'Wins',winpct:'Win %'}[S.settings.rankBy];
+  const P_=!winsOnly();                      // show the points columns?
   const pct=s=>Math.round(s.wr*100)+'%';
   const medal=['\u{1F947}','\u{1F948}','\u{1F949}'];
 
   const rowFor=(s,i,showMedal)=>`<tr class="${showMedal&&i<3?'top'+(i+1):''} ${resting.has(s.id)?'rest':''}">
     <td class="rk">${showMedal&&i<3?medal[i]:i+1}</td>
     <td>${esc(nameOf(s.id))}</td>
-    <td style="font-weight:900">${s.pts}</td>
+    ${P_?`<td style="font-weight:900">${s.pts}</td>`:''}
     <td class="${s.games<avgG-0.5?'few':''}">${s.games}</td>
-    <td>${s.games?s.avg.toFixed(1):'\u2013'}</td>
-    <td>${s.wins}</td><td>${s.losses}</td>
+    ${P_?`<td>${s.games?s.avg.toFixed(1):'\u2013'}</td>`:''}
+    <td style="${P_?'':'font-weight:900'}">${s.wins}</td><td>${s.losses}</td>
     <td>${s.games?pct(s):'\u2013'}</td></tr>`;
 
   const table=(rows,showMedal)=>`<div class="card board">
-    <table><thead><tr><th class="rk">#</th><th>Player</th><th>Pts</th><th>G</th><th>Avg</th><th>W</th><th>L</th><th>Win%</th></tr></thead>
+    <table><thead><tr><th class="rk">#</th><th>Player</th>${P_?'<th>Pts</th>':''}<th>G</th>${P_?'<th>Avg</th>':''}<th>W</th><th>L</th><th>Win%</th></tr></thead>
     <tbody>${rows.map((s,i)=>rowFor(s,i,showMedal)).join('')}</tbody></table></div>`;
 
   const header=`<div class="card tight"><div class="row"><span class="mini">Ranked by ${label}</span><span class="sp"></span>
@@ -1395,7 +1406,7 @@ function viewBoard(st){
   return header +
    `<div class="sec-h">Top three \u2014 all groups</div>` +
    table(list.slice(0,3),true) +
-   `<div class="muted" style="padding:0 4px 10px">Most points tonight, whichever group they play in.</div>` +
+   `<div class="muted" style="padding:0 4px 10px">${winsOnly()?'Most wins':'Most points'} tonight, whichever group they play in.</div>` +
    groups.map(g=>`
      <div class="sec-h"><i class="tdot" data-tier="${g.k}" style="margin-right:7px"></i>${g.name}
        <span style="font-weight:700;color:var(--ink3)"> \u00b7 ${g.rows.length}</span></div>
@@ -1415,15 +1426,21 @@ function highlights(st){
   const wl=s=>s.wins+'\u2013'+s.losses;
   const card=(lab,s,val,low)=>`<div class="${low?'low':''}">
     <div class="lab">${lab}</div><div class="nm">${esc(nameOf(s.id))}</div><div class="val">${val}</div></div>`;
-  const hp=top(s=>s.pts), hw=top(s=>s.wr), mw=top(s=>s.wins);
+  const hp=top(s=>s.pts), hw=top(s=>s.wr), mw=top(s=>s.wins), mg=top(s=>s.games);
   const lp=bot(s=>s.pts), lw=bot(s=>s.wins), lwp=bot(s=>s.wr);
   return `
   <div class="sec-h">Session highlights</div>
   <div class="hl">
-    ${card('\u{1F3F8} Highest points',hp,hp.pts+' pts')}
+    ${winsOnly()
+      ? card('\u{1F3C6} Most wins',mw,mw.wins+(mw.wins===1?' win':' wins'))
+      : card('\u{1F3F8} Highest points',hp,hp.pts+' pts')}
     ${card('\u{1F525} Best win rate',hw,pct(hw)+' \u00b7 '+wl(hw))}
-    ${card('\u{1F3C6} Most wins',mw,mw.wins+(mw.wins===1?' win':' wins'))}
-    ${card('\u{1F4C9} Lowest points',lp,lp.pts+' pts',1)}
+    ${winsOnly()
+      ? card('\u{1F3D1} Most games',mg,mg.games+(mg.games===1?' game':' games'))
+      : card('\u{1F3C6} Most wins',mw,mw.wins+(mw.wins===1?' win':' wins'))}
+    ${winsOnly()
+      ? card('\u{1F4C9} Fewest wins',lw,lw.wins+(lw.wins===1?' win':' wins'),1)
+      : card('\u{1F4C9} Lowest points',lp,lp.pts+' pts',1)}
     ${card('\u{1F944} Fewest wins',lw,lw.wins+(lw.wins===1?' win':' wins'),1)}
     ${card('\u2601\uFE0F Lowest win rate',lwp,pct(lwp)+' \u00b7 '+wl(lwp),1)}
   </div>`;
@@ -1615,9 +1632,9 @@ function viewHistory(st){
           <span class="mini" style="margin-left:8px">${t(m.at)}</span><span class="sp"></span>
           ${ri===0?`<button class="btn xs" onclick="undoLastMatch()">Undo</button>`:''}</div>
         <div class="hrow"><span class="w">${esc(teamName(w))}</span>
-          <span class="sc" style="color:var(--acc)">${ws}</span></div>
+          <span class="sc" style="color:var(--acc)">${ws==null?'won':ws}</span></div>
         <div class="hrow"><span style="color:var(--dim)">${esc(teamName(l))}</span>
-          <span class="sc" style="color:var(--dim2)">${ls}</span></div>
+          <span class="sc" style="color:var(--dim2)">${ls==null?'':ls}</span></div>
       </div>`;
     }).join('');
   }
@@ -1630,9 +1647,9 @@ function viewHistory(st){
         const ws=c.winScore,ls=lossOf(c);
         const w=c.winner==='a'?c.a:c.b,l=c.winner==='a'?c.b:c.a;
         return `<div class="hrow"><span class="mini" style="width:16px">${ci+1}</span>
-          <span class="w">${esc(teamName(w))}</span><span class="sc" style="color:var(--acc)">${ws}</span></div>
+          <span class="w">${esc(teamName(w))}</span><span class="sc" style="color:var(--acc)">${ws==null?'won':ws}</span></div>
         <div class="hrow" style="border-bottom:1px solid rgba(42,52,64,.5)"><span class="mini" style="width:16px"></span>
-          <span style="color:var(--dim)">${esc(teamName(l))}</span><span class="sc" style="color:var(--dim2)">${ls}</span></div>`;
+          <span style="color:var(--dim)">${esc(teamName(l))}</span><span class="sc" style="color:var(--dim2)">${ls==null?'':ls}</span></div>`;
       }).join('')}
       ${r.resting.length?`<div class="muted" style="margin-top:8px">Resting: ${r.resting.map(id=>esc(nameOf(id))).join(', ')}</div>`:''}
     </div>`).join('')+
@@ -1684,8 +1701,8 @@ function viewSettings(){
   <div class="sec-h">Session style</div>
   <div class="card">
     <div class="seg" style="margin-bottom:4px">
-      <button class="${s.style!=='rolling'?'on':''}" onclick="setStyle('sync')">Synchronised</button>
       <button class="${s.style==='rolling'?'on':''}" onclick="setStyle('rolling')">Rolling</button>
+      <button class="${s.style!=='rolling'?'on':''}" onclick="setStyle('sync')">Synchronised</button>
     </div>
     <div class="muted" style="padding:10px 2px 2px">${s.style==='rolling'
       ? `Each court runs on its own. The moment one finishes you enter that result and it refills
@@ -1701,6 +1718,18 @@ function viewSettings(){
   </div>
   <div class="sec-h">Scoring</div>
   <div class="card">
+    <div class="seg" style="margin-bottom:4px">
+      <button class="${winsOnly()?'on':''}" onclick="setScoring('wins')">Wins only</button>
+      <button class="${winsOnly()?'':'on'}" onclick="setScoring('points')">With points</button>
+    </div>
+    <div class="muted" style="padding:10px 2px 2px">${winsOnly()
+      ? `Tap the team that won and move on \u2014 no scores to type. The leaderboard
+         ranks by wins.`
+      : `Enter a score for every match. The leaderboard can rank by points, average,
+         wins or win rate.`}</div>
+  </div>
+  ${winsOnly()?'':`
+  <div class="card" style="margin-top:12px">
     <div class="seg" style="margin-bottom:4px">
       <button class="${s.mode==='firstto'?'on':''}" onclick="setMode('firstto')">First to</button>
       <button class="${s.mode!=='firstto'?'on':''}" onclick="setMode('combined')">Combined score</button>
@@ -1718,7 +1747,7 @@ function viewSettings(){
         style="width:96px;flex:none;text-align:center"
         onchange="setSetting('total',clamp(+this.value||21,5,99))">
     </div>
-  </div>
+  </div>`}
   <div class="sec-h">Match style</div>
   <div class="card">
     <div class="seg" style="margin-bottom:4px">
@@ -1740,6 +1769,7 @@ function viewSettings(){
     ${sl('noise','Social randomness','Higher = more shuffling, less optimal',1,5)}
 
   </div>
+  ${winsOnly()?'':`
   <div class="sec-h">Ranking</div>
   <div class="card">
     <div class="sl"><span class="lab">Rank leaderboard by</span>
@@ -1750,6 +1780,7 @@ function viewSettings(){
       <div class="seg" style="width:130px"><button class="${s.allowOverride?'on':''}" onclick="setSetting('allowOverride',true)">On</button>
       <button class="${!s.allowOverride?'on':''}" onclick="setSetting('allowOverride',false)">Off</button></div></div>
   </div>
+  `}
   <div class="muted" style="text-align:center;padding:8px 0 20px">Everything is stored on this device only.<br>
     <span class="mini" style="letter-spacing:.6px">Version ${BUILD}</span></div>`;
 }
@@ -1809,6 +1840,18 @@ function setPairing(v){
   render();
   toast(v==='level'?'Same level \u2014 groups play among themselves':'Social mix \u2014 everyone mixes');
 }
+function setScoring(v){
+  if(S.settings.scoring===v)return;
+  // Half-entered results would be stranded in whichever shape they were in.
+  const live = isRolling()
+    ? (S.courts||[]).some(c=>c&&(c.winner||hasScore(c)||c.entering))
+    : !!(S.current&&S.current.confirmed&&S.current.courts.some(c=>c.winner||hasScore(c)));
+  if(S.started&&live){toast('Save or clear the result on court first',1);return}
+  S.settings.scoring=v;
+  render();
+  toast(v==='wins'?'Wins only \u2014 just tap who won':'Scores on \u2014 enter a result each match');
+}
+
 function setStyle(v){
   if(S.settings.style===v)return;
   // Switching with matches in flight would void games people are playing.
@@ -1924,7 +1967,8 @@ function setScore(i,v){
 }
 function finishRound(){
   const cur=S.current;if(!cur)return;
-  if(!cur.courts.every(c=>c.winner&&hasScore(c))){toast('Enter a winner and score for every court',1);return}
+  if(!cur.courts.every(c=>c.winner&&(winsOnly()||hasScore(c)))){
+    toast(winsOnly()?'Pick a winner on every court':'Enter a winner and score for every court',1);return}
   S.rounds.push({n:cur.n,resting:[...cur.resting],
     courts:cur.courts.map(c=>({a:[...c.a],b:[...c.b],winner:c.winner,winScore:c.winScore,loseScore:lossOf(c)}))});
   S.forced={pairs:[],match:null};
@@ -2169,7 +2213,8 @@ function fillCourts(justFinished){
 function finishMatch(i){
   const c = S.courts[i];
   if(!c) return;
-  if(!c.winner || !hasScore(c)){ toast('Enter a winner and score for this court', 1); return; }
+  if(!c.winner || (!winsOnly() && !hasScore(c))){
+    toast(winsOnly()?'Tap the winning team':'Enter a winner and score for this court', 1); return; }
 
   S.matches = S.matches || [];
   S.matches.push({
