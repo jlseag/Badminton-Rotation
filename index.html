@@ -183,7 +183,7 @@ nav button.on{color:var(--court);background:rgba(14,138,79,.11)}
 .awaytag{margin-left:7px;font-size:10.5px;font-weight:900;letter-spacing:.06em;
   text-transform:uppercase;color:var(--ink3);background:var(--line);
   padding:2px 7px;border-radius:999px;vertical-align:1px}
-.awaybtn{flex:0 0 auto;font-size:11.5px;font-weight:800;color:var(--ink2);
+.awaybtn{flex:0 0 auto;touch-action:manipulation;font-size:11.5px;font-weight:800;color:var(--ink2);
   background:var(--ground);border:2px solid var(--line);border-radius:9px;
   padding:6px 10px;margin-right:4px}
 .awaybtn:active{background:var(--line)}
@@ -444,7 +444,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v48';   // bump together with V in sw.js
+const BUILD='v49';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -639,7 +639,7 @@ function pickResting(need,st,forcedIn){
   };
   // locked partners sit out together, so the lock never gets broken by a rest
   const seen=new Set(), units=[];
-  S.players.forEach(p=>{
+  present().forEach(p=>{                       // away players are not resting, they are gone
     if(forcedIn.has(p.id)||seen.has(p.id))return;
     const mate=lockedMate(p.id);
     if(mate&&P(mate)&&!forcedIn.has(mate)&&!seen.has(mate)){
@@ -674,14 +674,18 @@ function activeForced(){
 }
 
 // Courts in Settings is a MAXIMUM — a round uses as many as the players present can fill.
+/* Courts we can actually fill. Counts who is PRESENT, not everyone on the
+   roster: with away players included, Synchronised built rounds around people
+   who had gone home (or had not arrived yet) and Away appeared to do nothing
+   in that style. */
 function activeCourts(){
-  return clamp(Math.min(S.settings.courts,Math.floor(S.players.length/4)),0,20);
+  return clamp(Math.min(S.settings.courts,Math.floor(present().length/4)),0,20);
 }
 
 function generateRound(keepLocks){
   const st=stats(), str=strengths(st);
   const courts=activeCourts();
-  if(courts<1)return{error:`A doubles court needs 4 players — you have ${S.players.length}.`};
+  if(courts<1)return{error:`A doubles court needs 4 players — you have ${present().length} here.`};
   const need=courts*4;
 
   const f=activeForced();
@@ -710,7 +714,7 @@ function generateRound(keepLocks){
 
   // who is already committed to play, then choose resters (locked partners rest together)
   const mustPlay=new Set(used);
-  const resting=pickResting(S.players.length-need,st,mustPlay);
+  const resting=pickResting(present().length-need,st,mustPlay);
   const restSet=new Set(resting);
 
   // every locked pair that is playing this round is a team, automatically
@@ -768,7 +772,10 @@ function generateRound(keepLocks){
 
   // ---- Same level: courts are cut straight out of the skill order ----
   if(S.settings.pairing==='level'){
-    const playing=S.players.filter(p=>!restSet.has(p.id));   // already in tier order
+    // present(), not S.players: an away player is never in restSet (pickResting
+    // does not consider them), so taking the whole roster here put them
+    // straight onto a court.
+    const playing=present().filter(p=>!restSet.has(p.id));   // already in tier order
     const seen=new Set(), units=[];
     playing.forEach(p=>{
       if(seen.has(p.id))return;
@@ -821,7 +828,7 @@ function generateRound(keepLocks){
     // couldn't tile cleanly (locked pairs straddling a boundary) — fall through to the mixer
   }
 
-  const singles=S.players.map(p=>p.id).filter(id=>!used.has(id)&&!restSet.has(id));
+  const singles=present().map(p=>p.id).filter(id=>!used.has(id)&&!restSet.has(id));
   const singlesNeeded=openCourts*4-pairUnits.length*2;
   if(singles.length!==singlesNeeded)return{error:'Could not fit the locked or forced pairings into the available courts.'};
 
@@ -946,7 +953,7 @@ function render(){
       : S.ended ? 'Final Score'
       : S.current ? 'Round '+S.current.n : 'Session';
   $('#hSub').textContent =
-      `${S.players.length} player${S.players.length===1?'':'s'} · ${activeCourts()||'no'} court${activeCourts()===1?'':'s'} · ${roundsDone()} round${roundsDone()===1?'':'s'} played`;
+      `${present().length} player${present().length===1?'':'s'} · ${activeCourts()||'no'} court${activeCourts()===1?'':'s'} · ${roundsDone()} round${roundsDone()===1?'':'s'} played`;
   $('#hRight').innerHTML = S.started&&tab!=='settings'
       ? `<span class="tag ${isCompetitive()?'r':'b'}">${isCompetitive()?'Competitive':'Warm-up'}</span>`:'';
   wire();
@@ -956,8 +963,11 @@ function go(t){tab=t;sel=null;window.scrollTo(0,0);render()}
 
 /* ---------------- start panel (Game tab, before a session) --------------- */
 function viewStart(){
-  const n=S.players.length, c=S.settings.courts, ac=activeCourts(), playing=ac*4;
-  if(!n)return `<div class="card"><div class="empty"><span class="ic">\u{1F3F8}</span>
+  // present(), not the whole roster: with people marked away the panel used to
+  // promise courts and resting numbers that activeCourts() would not deliver.
+  const n=present().length, away=S.players.length-n,
+        c=S.settings.courts, ac=activeCourts(), playing=ac*4;
+  if(!S.players.length)return `<div class="card"><div class="empty"><span class="ic">\u{1F3F8}</span>
       <b>Add your players first</b>Put everyone in, then sort them into skill groups.</div></div>
     <button class="btn pri full" onclick="go('players')">Go to Players</button>`;
   return `
@@ -968,6 +978,7 @@ function viewStart(){
       <div><div style="font-family:Fredoka,sans-serif;font-weight:600;font-size:24px">${ac}</div><div class="mini">Courts in use</div></div>
     </div>
   </div>
+  ${away ? `<div class="note">${away} marked away \u2014 ${n} here, and only they are picked.</div>` : ''}
   ${n<4 ? `<div class="note">A doubles court needs 4 players \u2014 ${4-n} more and you can play.</div>`
    : ac<c ? `<div class="note">${n} players fills <b>${ac} court${ac>1?'s':''}</b>${n-playing?` with ${n-playing} resting each round`:''}.
              Courts is a maximum \u2014 the app only uses what you can fill.</div>` : ''}
@@ -1514,7 +1525,13 @@ function wirePlayerDrag(){
 }
 function pdDown(e){
   if(e.button!==undefined&&e.button>0)return;
+  // The grip starts a drag; any BUTTON in the row is its own control and the
+  // row must keep its hands off it. Without .awaybtn here a tap on Away either
+  // got eaten by the 300ms long-press (the row jumped into drag mode, so the
+  // click never fired) or fell through to playerSheet() -- which is why the
+  // host reported that Away does nothing.
   if(e.target.closest('.grip'))return;
+  if(e.target.closest('button'))return;
   const el=e.currentTarget, sx=e.clientX, sy=e.clientY;
   let moved=false;
   const timer=setTimeout(()=>{if(!moved)startDrag(el,sx,sy,e.pointerId)},300);
@@ -2247,6 +2264,26 @@ function fillCourt(i, justFinished){
     }
   }
 
+  // No instant replay.
+  // The four who just walked off are REMOVED from the candidate pool, not
+  // merely pushed down it. A reorder (the old restOne setting) was useless in
+  // Same level mode, because chooseFour re-sorts everyone by skill rank and
+  // throws the queue order away -- so the same four kept coming straight back
+  // on. Measured at 20 players on 3 courts, 60 matches: 22-29 instant replays,
+  // sometimes all four of them, and the games spread reached 12.
+  //
+  // It yields when there is no slack. The rule needs MORE than four other
+  // free players, not exactly four: with exactly four the rested court has
+  // only one legal foursome, so resting becomes a rigid alternation of two
+  // sealed blocks -- at 16 players on 3 courts that drove the number of
+  // different people each player met from 15 down to 3. Mixing wins there,
+  // which is the same call the clique guard above already makes.
+  if(justFinished && justFinished.length){
+    const jf = new Set(justFinished);
+    const fresh = order.filter(id => !jf.has(id));
+    if(fresh.length > 4) order = fresh;
+  }
+
   if(order.length < 4){ S.courts[i] = null; return false; }
 
   const st = stats(), str = strengths(st);
@@ -2306,6 +2343,31 @@ function finishMatch(i){
    Their true `games` count, and therefore the leaderboard, is untouched. */
 function setAway(id, away){
   const p = P(id); if(!p) return;
+
+  /* Marking someone away while they are standing on a court used to do
+     nothing visible: it set the flag, then called fillCourts(), which only
+     ever FILLS empty courts and never takes anyone off one. So the host saw
+     the player still playing and reported that Away was broken. Ask instead,
+     because the two sensible answers are genuinely different -- a player
+     leaving early can finish the game, an injury cannot -- and redrawing
+     silently would throw away a score already entered on that court. */
+  if(away && S.started){
+    const ci = (S.courts || []).findIndex(c => c && [...c.a, ...c.b].includes(id));
+    if(ci >= 0){ awayOnCourtDialog(id, ci); return; }
+    // Synchronised keeps the round in S.current, not S.courts.
+    if(S.current && !isRolling()){
+      const inRound = (S.current.courts || [])
+        .some(c => c && [...c.a, ...c.b].includes(id));
+      if(inRound){ awayOnCourtDialog(id, -1); return; }
+    }
+  }
+
+  applyAway(id, away);
+}
+
+/* The actual state change, once the court question is settled. */
+function applyAway(id, away){
+  const p = P(id); if(!p) return;
   p.away = !!away;
   if(!away){
     const others = present().filter(x => x.id !== id);
@@ -2315,6 +2377,43 @@ function setAway(id, away){
   if(isRolling() && S.started) fillCourts();
   render();
   toast(away ? p.name + ' is away' : p.name + ' is back');
+}
+
+/* Away while on court. `ci` is the rolling court index, or -1 for a
+   synchronised round. */
+function awayOnCourtDialog(id, ci){
+  const p = P(id); if(!p) return;
+  const where = ci >= 0 ? 'court ' + (ci + 1) : 'this round';
+  modal(`<h3 style="margin-bottom:6px">${esc(p.name)} is playing</h3>
+    <div class="muted" style="margin-bottom:18px">They are on ${where} right now.
+      Either way they will not be picked again until you bring them back.</div>
+    <button class="btn pri full" onclick="awayAfterMatch('${id}')">Let that match finish</button>
+    <button class="btn dan full" style="margin-top:10px"
+      onclick="awayRedraw('${id}',${ci})">Take them off and redraw</button>
+    <button class="btn gho full" style="margin-top:10px" onclick="closeModal()">Cancel</button>`);
+}
+/* Leaving early: nothing in progress is disturbed, and present() keeps them
+   out of every future pick. */
+function awayAfterMatch(id){
+  closeModal();
+  applyAway(id, true);
+  toast(P(id).name + ' is away after this match');
+}
+/* Injury: the court goes back to the queue and is drawn again without them.
+   Any score typed on that court is lost, which is why this was never silent. */
+function awayRedraw(id, ci){
+  closeModal();
+  const p = P(id);
+  p.away = true;
+  if(ci >= 0){
+    S.courts[ci] = null;
+    fillCourts();
+    render();
+    toast(p.name + ' is away \u2014 court ' + (ci + 1) + ' redrawn');
+  } else {
+    regen();
+    toast(p.name + ' is away \u2014 round redrawn');
+  }
 }
 
 function minQueueGames(){
