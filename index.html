@@ -440,7 +440,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v43';   // bump together with V in sw.js
+const BUILD='v44';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -1881,14 +1881,29 @@ function setSetting(k,v){
   }
   render();
 }
+/* Wipe every trace of a session's play, leaving the roster and settings alone.
+   Rolling keeps its results in S.matches/S.courts and Synchronised in
+   S.rounds/S.current -- clearing only one of the two left the leaderboard and
+   history of the old session running straight into the new one. The queue
+   counters live on the players themselves, so they reset here too. */
+function clearResults(){
+  S.rounds=[]; S.current=null;                 // synchronised
+  S.courts=[]; S.matches=[]; S.recentQuads={}; // rolling
+  S.forced={pairs:[],match:null}; S.locks=[];
+  S.players.forEach(p=>{ p.qg=0; p.lastPlayed=0; });
+  editRound=null; sel=null;
+}
 function startSession(){
   if(!S.players.length)return;
-  S.started=true;S.ended=false;S.rounds=[];S.current=null;S.forced={pairs:[],match:null};S.locks=[];tab='game';
+  clearResults();
+  S.started=true;S.ended=false;tab='game';
   render();toast('Session started — good luck!');
 }
 function newSession(){
-  ask('Players and their skill order are kept — all results are cleared.','Start a new session',()=>{
-    S.rounds=[];S.current=null;S.forced={pairs:[],match:null};S.locks=[];S.started=false;S.ended=false;tab='game';render()});
+  ask('Players and their skill order are kept — every result, the leaderboard and the history are cleared.','Start a new session',()=>{
+    clearResults();
+    S.started=false;S.ended=false;tab='game';window.scrollTo(0,0);render();
+    toast('New session — the scoreboard is empty')});
 }
 function hardReset(){
   ask('Players, rounds and settings will all be erased from this device.','Reset everything',()=>{
