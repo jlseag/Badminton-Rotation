@@ -443,7 +443,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v45';   // bump together with V in sw.js
+const BUILD='v46';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -510,7 +510,9 @@ const pk=(a,b)=>a<b?a+'|'+b:b+'|'+a;
 /* skill tiers — Advanced is strongest. The players array stays the single skill
    order; tier just groups it, and sorting by tier keeps the two in step. */
 const TIERS=[['adv','Advanced'],['upp','Upper Intermediate'],['int','Intermediate'],['beg','Beginner']];
-const TIER_SHORT={adv:'Advanced',upp:'Upper',int:'Intermediate',beg:'Beginner'};
+/* Abbreviations, used on a court card only when three or four groups share
+   one court -- the full names would wrap to a second line there. */
+const TIER_SHORT={adv:'Adv',upp:'Upper',int:'Int',beg:'Beg'};
 const TIER_I=t=>{const i=TIERS.findIndex(x=>x[0]===t);return i<0?1:i};
 const tierOf=p=>p&&TIERS.some(x=>x[0]===p.tier)?p.tier:'int';
 function sortByTier(){            // stable: order inside a tier is preserved
@@ -873,8 +875,12 @@ function generateRound(keepLocks){
 
 function courtTiers(c){            // which skill groups are on this court, in order
   const seen=[];
-  TIERS.forEach(([k])=>{ if([...c.a,...c.b].some(id=>tierOf(P(id))===k))seen.push(TIER_SHORT[k]) });
-  return seen.join(' + ');
+  TIERS.forEach(([k,name])=>{ if([...c.a,...c.b].some(id=>tierOf(P(id))===k))seen.push([k,name]) });
+  // One or two groups is the normal case and the full names fit on the line.
+  // Three or four only happens when a group cannot fill a court on its own,
+  // and there the names have to be abbreviated to stay on one line.
+  const brief = seen.length >= 3;
+  return seen.map(([k,name]) => brief ? TIER_SHORT[k] : name).join(' + ');
 }
 function balanceOf(c,str){
   const d=Math.abs((str[c.a[0]]+str[c.a[1]])-(str[c.b[0]]+str[c.b[1]]));
