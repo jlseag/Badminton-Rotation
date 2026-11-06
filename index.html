@@ -444,11 +444,15 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v49';   // bump together with V in sw.js
+const BUILD='v50';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
-const uid=()=>'p'+Math.random().toString(36).slice(2,9);
+/* A counter as well as randomness. Players are keyed by this id, so two
+   players sharing one silently merges them on every lookup -- rare, but it
+   costs nothing to make impossible. */
+let _uidN=0;
+const uid=()=>'p'+(Date.now().toString(36))+(_uidN++).toString(36)+Math.random().toString(36).slice(2,6);
 
 /* ---------------- state ---------------- */
 function defState(){return{
@@ -539,7 +543,16 @@ function scoreRange(){               // [min,max] of the number the user picks
 const pickedValue=c=>isFirstTo()?lossOf(c):c.winScore;
 /* locked partners — a standing rule, not a per-round flag */
 const isLockedPair=(a,b)=>S.locks.some(l=>pk(l[0],l[1])===pk(a,b));
-const lockedMate=id=>{const l=S.locks.find(l=>l[0]===id||l[1]===id);return l?(l[0]===id?l[1]:l[0]):null};
+/* A locked pair is a standing rule, but it cannot reach someone who is not
+   here. Treating an away partner as a partner pulled them into the resting
+   list, and in Same level straight onto a court, around every present()
+   filter. The lock itself is kept, so it resumes when they come back. */
+const lockedMate=id=>{
+  const l=S.locks.find(l=>l[0]===id||l[1]===id); if(!l)return null;
+  const m = l[0]===id ? l[1] : l[0];
+  const mp = P(m);
+  return (mp && !mp.away) ? m : null;
+};
 const isLocked=id=>!!lockedMate(id);
 function setLock(a,b,on){
   S.locks=S.locks.filter(l=>!l.includes(a)&&!l.includes(b));
@@ -663,12 +676,16 @@ function pickResting(need,st,forcedIn){
 function activeForced(){
   const f={pairs:[],match:null};
   const used=new Set();
+  // here() -- a forced pairing is skipped while anyone in it is away, and
+  // comes back by itself when they return. Without this the pairing was
+  // placed before resting was chosen, so it put away players on court.
+  const here = id => { const p=P(id); return !!p && !p.away; };
   if(S.forced.match){
     const ids=[...S.forced.match.a,...S.forced.match.b];
-    if(ids.every(id=>P(id))&&new Set(ids).size===4){f.match={a:[...S.forced.match.a],b:[...S.forced.match.b]};ids.forEach(i=>used.add(i))}
+    if(ids.every(here)&&new Set(ids).size===4){f.match={a:[...S.forced.match.a],b:[...S.forced.match.b]};ids.forEach(i=>used.add(i))}
   }
   S.forced.pairs.forEach(pr=>{
-    if(pr.every(id=>P(id))&&!pr.some(id=>used.has(id))&&pr[0]!==pr[1]){f.pairs.push([...pr]);pr.forEach(i=>used.add(i))}
+    if(pr.every(here)&&!pr.some(id=>used.has(id))&&pr[0]!==pr[1]){f.pairs.push([...pr]);pr.forEach(i=>used.add(i))}
   });
   return f;
 }
@@ -719,7 +736,7 @@ function generateRound(keepLocks){
 
   // every locked pair that is playing this round is a team, automatically
   S.locks.forEach(pr=>{
-    if(pr.length!==2||!pr.every(id=>P(id)))return;
+    if(pr.length!==2||!pr.every(id=>{const p=P(id);return p&&!p.away}))return;
     if(pr.some(i=>used.has(i))||pr.some(i=>restSet.has(i)))return;
     if(pairUnits.length>=slotsFree){drop.push({ids:pr});return}
     pairUnits.push({ids:[...pr],lock:true});take(pr);
@@ -1847,33 +1864,64 @@ function addPlayer(){
   sortByTier();
   el.value='';
   if(S.current&&!S.current.confirmed)S.current=null;
+  // The new arrival may be the fourth who makes another court possible --
+  // open it now rather than at the end of somebody else's match.
+  if(S.started&&isRolling())fillCourts();
   render();el=$('#newName');if(el)el.focus();
 }
 function renamePlayer(id){
   const p=P(id);if(!p)return;
   askText('Rename player',p.name,n=>{if(n&&n.trim()){p.name=n.trim();render()}});
 }
+/* Everything this player appears in, in BOTH stores. stats() only reads the
+   store belonging to the style currently selected, so asking it how many games
+   someone has played answered 0 for a player with a full Rolling history while
+   Synchronised happened to be on -- and they were then removed with no warning
+   and no cleanup, orphaning those matches. */
+function playedCount(id){
+  let n=0;
+  (S.matches||[]).forEach(m=>{ if([...m.a,...m.b].includes(id))n++ });
+  (S.rounds ||[]).forEach(r=>r.courts.forEach(c=>{ if([...c.a,...c.b].includes(id))n++ }));
+  return n;
+}
 function delPlayer(id){
-  const st=stats(),s=st[id];
-  if(s&&s.games){
-    ask(`${nameOf(id)} has already played ${s.games} game(s). Those rounds will be removed from the standings.`,
-        'Remove '+nameOf(id),()=>{
-          S.rounds=S.rounds.filter(r=>!r.courts.some(c=>[...c.a,...c.b].includes(id)));
-          dropPlayer(id);
-        });
+  const n=playedCount(id);
+  if(n){
+    ask(`${nameOf(id)} has already played ${n} game${n===1?'':'s'}. Those results will be removed from the standings.`,
+        'Remove '+nameOf(id), ()=>dropPlayer(id));
     return;
   }
   dropPlayer(id);
 }
 function dropPlayer(id){
   S.players=S.players.filter(p=>p.id!==id);
+  // Both stores, always: a result naming someone who is no longer on the
+  // roster still fed the other three players' totals, so the leaderboard
+  // stopped adding up to four games per match.
+  S.rounds =(S.rounds ||[]).filter(r=>!r.courts.some(c=>[...c.a,...c.b].includes(id)));
+  S.matches=(S.matches||[]).filter(m=>![...m.a,...m.b].includes(id));
   S.locks=S.locks.filter(l=>!l.includes(id));
   S.forced.pairs=S.forced.pairs.filter(pr=>!pr.includes(id));
   if(S.forced.match&&[...S.forced.match.a,...S.forced.match.b].includes(id))S.forced.match=null;
   if(S.current&&(S.current.resting.includes(id)||S.current.courts.some(c=>[...c.a,...c.b].includes(id))))S.current=null;
+  // A Rolling court holding the removed player kept showing them, and a court
+  // too many stayed up once the roster could no longer fill it. Tear down any
+  // court that named them and let fillCourts() rebuild to the new size.
+  if(S.started){
+    S.courts=(S.courts||[]).map(c=>(c&&[...c.a,...c.b].includes(id))?null:c);
+    if(isRolling())fillCourts();
+  }
   render();
 }
-function setCourts(d){S.settings.courts=clamp(S.settings.courts+d,1,12);render()}
+/* Raising the limit has to open the new court now, not whenever the next
+   match happens to finish: the host taps + because people are waiting, and
+   nothing moving looks like the button is broken. Lowering it only stops
+   courts being refilled -- fillCourts() never takes down a match in play. */
+function setCourts(d){
+  S.settings.courts=clamp(S.settings.courts+d,1,12);
+  if(S.started&&isRolling())fillCourts();
+  render();
+}
 function clearLiveScores(){      // a half-entered round is meaningless under new rules
   if(!S.current)return false;
   let had=false;
@@ -1909,6 +1957,24 @@ function setStyle(v){
     ? (S.courts||[]).some(c=>c&&(c.winner||hasScore(c)||c.entering))
     : !!(S.current&&S.current.confirmed);
   if(S.started&&live){toast('Finish the results on court first',1);return}
+
+  /* The two styles keep their results in different places -- Rolling in
+     S.matches, Synchronised in S.rounds -- and the leaderboard reads only the
+     one in use. Switching with results already recorded therefore empties the
+     board and the history with no warning at all. Nothing is deleted and
+     switching back brings it all straight back, but the host cannot know that
+     from looking at it, so say so first. */
+  const done = isRolling() ? (S.matches||[]).length : (S.rounds||[]).length;
+  if(S.started && done){
+    const unit = done===1 ? (isRolling()?'match':'round')
+                          : (isRolling()?'matches':'rounds');
+    ask(`The ${done} ${unit} already played ${done===1?'stays':'stay'} saved, but ${done===1?'it is':'they are'} not counted while the other style is on. Switch back and ${done===1?'it returns':'they all return'}.`,
+        'Switch style', () => applyStyle(v));
+    return;
+  }
+  applyStyle(v);
+}
+function applyStyle(v){
   S.settings.style=v;
   if(v==='rolling'){ S.current=null; S.courts=[]; if(S.started)fillCourts(); }
   else { S.courts=[]; }
@@ -2296,12 +2362,18 @@ function fillCourt(i, justFinished){
 }
 
 /* Fill every empty court, best-filled first. */
+/* Four people standing on a court are playing a match, whether or not a score
+   has been typed yet. Lowering the court count, or enough players going away,
+   shrinks `want` -- and the old code answered that by nulling every court past
+   the new limit, wiping a match in progress and dumping its four players with
+   no warning. Lowering the limit now simply stops those courts being refilled;
+   each one disappears when its own result is saved. */
 function fillCourts(justFinished){
   const want = activeCourts();
   S.courts = S.courts || [];
   S.courts.length = Math.max(S.courts.length, want);
   for(let i = 0; i < S.courts.length; i++){
-    if(i >= want){ S.courts[i] = null; continue; }
+    if(i >= want) continue;                 // past the limit: let it play out
     if(!S.courts[i]) fillCourt(i, justFinished);
   }
   while(S.courts.length && S.courts[S.courts.length - 1] == null &&
@@ -2359,6 +2431,11 @@ function setAway(id, away){
       const inRound = (S.current.courts || [])
         .some(c => c && [...c.a, ...c.b].includes(id));
       if(inRound){ awayOnCourtDialog(id, -1); return; }
+      // Resting is not playing, so there is nothing to interrupt and nothing
+      // to ask: just take them off this round's resting list. Leaving them on
+      // it showed someone waiting for a turn after they had gone home.
+      const ri = (S.current.resting || []).indexOf(id);
+      if(ri >= 0) S.current.resting.splice(ri, 1);
     }
   }
 
