@@ -64,7 +64,7 @@ JSON backup, and **Import session** to move a session to another device.
 - **Social mix** — everyone mixes with everyone, and teams are built to be even across skill
   levels, so a stronger player gets a weaker partner.
 
-Players are grouped into **Advanced / Upper Int. / Intermediate / Beginner** — Advanced is strongest,
+Players are grouped into **Advanced / Upper Intermediate / Intermediate / Beginner** — Advanced is strongest,
 and it is entirely up to you how many go in each. Drag the ≡ handle on the right of a row to move
 someone between groups or within one; the number beside it is their overall rank, which is what
 the matchmaker uses. Tap a name to rename them, move them, or take them out of the session.
