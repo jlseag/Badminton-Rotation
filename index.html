@@ -444,7 +444,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v47';   // bump together with V in sw.js
+const BUILD='v48';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -1634,19 +1634,21 @@ function viewHistory(st){
     if(!ms.length)return `<div class="card"><div class="empty"><span class="ic">📋</span><b>No matches finished yet</b>Each match appears here as soon as you save its result</div></div>`;
     const t=n=>new Date(n).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
     return ms.slice().reverse().map((m,ri)=>{
+      const idx=ms.length-1-ri;          // the row is reversed; edit the real match
       const ws=m.winScore, ls=m.loseScore;
       const w=m.winner==='a'?m.a:m.b, l=m.winner==='a'?m.b:m.a;
       return `<div class="hist">
         <div class="row" style="margin-bottom:6px">
           <b style="font-size:15px">Court ${m.court}</b>
           <span class="mini" style="margin-left:8px">${t(m.at)}</span><span class="sp"></span>
-          ${ri===0?`<button class="btn xs" onclick="undoLastMatch()">Undo</button>`:''}</div>
+          <button class="btn xs" onclick="editMatchDialog(${idx})">Edit</button></div>
         <div class="hrow"><span class="w">${esc(teamName(w))}</span>
           <span class="sc" style="color:var(--acc)">${ws==null?'won':ws}</span></div>
         <div class="hrow"><span style="color:var(--dim)">${esc(teamName(l))}</span>
           <span class="sc" style="color:var(--dim2)">${ls==null?'':ls}</span></div>
       </div>`;
-    }).join('');
+    }).join('')+
+    `<button class="btn dan full" onclick="undoLastMatch()">Undo last match</button>`;
   }
   if(!S.rounds.length)return `<div class="card"><div class="empty"><span class="ic">📋</span><b>No rounds finished yet</b>Completed rounds appear here and can be edited</div></div>`;
   return S.rounds.slice().reverse().map(r=>`
@@ -1678,10 +1680,37 @@ function editRoundDialog(n){
           <button class="${c.winner==='a'?'on':''}" onclick="editSet(${n},${i},'w','a')">${esc(teamName(c.a))}</button>
           <button class="${c.winner==='b'?'on':''}" onclick="editSet(${n},${i},'w','b')">${esc(teamName(c.b))}</button>
         </div>
-        <div class="mini" style="margin-bottom:6px">${isFirstTo()?"Loser's score":'Winning score'}</div>
-        <div class="scorepick${opts.length>12?' wide':''}">${opts.map(v=>`<button class="${pickedValue(c)===v?'on':''}" onclick="editSet(${n},${i},'s',${v})">${v}</button>`).join('')}</div>
+        ${winsOnly()?'':`<div class="mini" style="margin-bottom:6px">${isFirstTo()?"Loser's score":'Winning score'}</div>
+        <div class="scorepick${opts.length>12?' wide':''}">${opts.map(v=>`<button class="${pickedValue(c)===v?'on':''}" onclick="editSet(${n},${i},'s',${v})">${v}</button>`).join('')}</div>`}
       </div>`).join('')}
     <button class="btn pri full" onclick="closeModal();render()">Done</button>`);
+}
+/* The Rolling twin of editRoundDialog. A match carries the same winner /
+   winScore / loseScore shape as a court, so applyScore, lossOf and
+   pickedValue all work on it unchanged, and stats() recomputes from
+   S.matches the moment it changes -- nothing else has to be touched. */
+function editMatchDialog(idx){
+  const m=(S.matches||[])[idx]; if(!m)return;
+  const t=new Date(m.at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  const [min,max]=scoreRange();
+  const opts=[];for(let v=min;v<=max;v++)opts.push(v);
+  modal(`<h3 style="margin-bottom:4px">Edit match</h3>
+    <div class="muted" style="margin-bottom:14px">Court ${m.court} \u00b7 ${t} \u00b7
+      ${winsOnly()?'Tap the team that won.':'Wins, games, points and the leaderboard all recalculate.'}</div>
+    <div class="mini" style="margin-bottom:6px">Winner</div>
+    <div class="seg" style="margin-bottom:${winsOnly()?'16':'12'}px">
+      <button class="${m.winner==='a'?'on':''}" onclick="editMatchSet(${idx},'w','a')">${esc(teamName(m.a))}</button>
+      <button class="${m.winner==='b'?'on':''}" onclick="editMatchSet(${idx},'w','b')">${esc(teamName(m.b))}</button>
+    </div>
+    ${winsOnly()?'':`<div class="mini" style="margin-bottom:6px">${isFirstTo()?"Loser's score":'Winning score'}</div>
+    <div class="scorepick${opts.length>12?' wide':''}">${opts.map(v=>
+      `<button class="${pickedValue(m)===v?'on':''}" onclick="editMatchSet(${idx},'s',${v})">${v}</button>`).join('')}</div>`}
+    <button class="btn pri full" style="margin-top:14px" onclick="closeModal();render()">Done</button>`);
+}
+function editMatchSet(idx,what,val){
+  const m=(S.matches||[])[idx]; if(!m)return;
+  if(what==='w')m.winner=val; else applyScore(m,val);
+  save();editMatchDialog(idx);
 }
 function editSet(n,i,what,val){
   const r=S.rounds.find(x=>x.n===n);if(!r)return;
