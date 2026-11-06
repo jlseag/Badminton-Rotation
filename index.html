@@ -440,7 +440,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v42';   // bump together with V in sw.js
+const BUILD='v43';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -2496,6 +2496,18 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
 
     if(row.suspended) return { state:'suspended' };
     if(!live)         return { state:'lapsed', plan:row.plan };
+
+    // Is THIS DEVICE still allowed? Asked every time the gate is considered,
+    // so a removed device can never slip through on a quick re-login.
+    try{
+      const dq = await sbFetch('/rest/v1/devices?select=revoked&host_id=eq.' + A.id +
+                               '&device_key=eq.' + encodeURIComponent(deviceKey()));
+      if(dq.ok){
+        const d = await dq.json().catch(() => null);
+        if(d && d[0] && d[0].revoked) return { state:'device_removed' };
+      }
+    }catch(_){ /* offline: the heartbeat catches it when the signal returns */ }
+
     return { state:'ok' };
   }
 
@@ -2560,14 +2572,12 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
      side; all that is left is to stop pretending otherwise. Nothing local is
      deleted -- the roster and results stay, and signing back in restores them. */
   function removedHere(){
-    A = null; C = null;
-    drop(AUTH_LS); drop('badminton_ent_v1');
-    showSignIn('Access on this device was removed by the organiser. '+
-               'Sign in again, or contact them.');
+    lastTouch = 0;                       // so the next check is never skipped
+    boot(false);                         // one road to the locked screen
   }
 
   function signOut(){
-    A = null; C = null;
+    A = null; C = null; lastTouch = 0;   // a fresh sign-in re-checks the device
     drop(AUTH_LS); drop('badminton_ent_v1');
     showSignIn('');
   }
@@ -2651,6 +2661,11 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
           load(); render();
         }
         openApp();
+        break;
+      case 'device_removed':
+        showLocked('This device was removed',
+          'The organiser removed access for this device. Nothing on it has been '+
+          'deleted. Ask them to restore it, or sign in on another device.', true);
         break;
       case 'suspended':
         showLocked('Access paused',
