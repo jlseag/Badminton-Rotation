@@ -201,15 +201,15 @@ nav button.on{color:var(--court);background:rgba(14,138,79,.11)}
 .court{background:var(--card);border:2px solid var(--line);border-radius:var(--r);overflow:hidden;
   margin-bottom:14px;box-shadow:var(--shadow)}
 .court.locked{border-color:var(--court);box-shadow:0 0 0 3px rgba(14,138,79,.13),var(--shadow)}
-.court-h{display:flex;align-items:center;gap:8px;padding:11px 14px;color:#fff;
+.court-h{display:flex;flex-wrap:wrap;align-items:center;gap:0 8px;padding:11px 14px;color:#fff;
   background:repeating-linear-gradient(90deg,rgba(255,255,255,.12) 0 2px,transparent 2px 46px),
              linear-gradient(135deg,var(--court-l),var(--court-d))}
 .court-h .cn{font-family:Fredoka,sans-serif;font-weight:600;font-size:16px;white-space:nowrap;
   min-width:0;overflow:hidden;text-overflow:ellipsis}
-/* Its own line under the court number: the full group names ('Advanced +
-   Upper + Intermediate') do not fit beside it on a phone, and the court
-   title's nowrap would otherwise clip them to an ellipsis. */
-.ctier{display:block;font-family:Nunito,sans-serif;font-weight:800;font-size:11px;
+/* A full-width row of its own beneath the court number and the balance
+   reading. Sharing their line left 'Upper Intermediate + Intermediate'
+   wrapping to two lines, and the court title's nowrap would clip it. */
+.ctier{flex:1 1 100%;order:3;font-family:Nunito,sans-serif;font-weight:800;font-size:11px;
   color:rgba(255,255,255,.8);letter-spacing:.3px;white-space:normal;margin-top:1px}
 .court-b{padding:14px}
 .team{border:2px solid var(--line);border-bottom-width:3px;border-radius:var(--r-sm);padding:12px;
@@ -247,9 +247,10 @@ nav button.on{color:var(--court);background:rgba(14,138,79,.11)}
   border-bottom-width:4px;border-bottom-color:var(--line2);font-family:Fredoka,sans-serif;font-weight:600;font-size:17px}
 .scorepick button:active{transform:translateY(2px);border-bottom-width:2px}
 .scorepick button.on{background:var(--court);color:#fff;border-color:var(--court-d);border-bottom-color:var(--court-x)}
-.bal{display:flex;align-items:center;gap:7px;font-size:11.5px;font-weight:900;margin-left:auto;color:#fff}
-.balbar{width:46px;height:7px;border-radius:4px;background:rgba(255,255,255,.3);overflow:hidden}
-.balbar i{display:block;height:100%;border-radius:4px}
+/* Hard right, on one line, and never squeezed: the court's group label gets
+   whatever is left, which is what keeps it off a second line. */
+.bal{display:flex;align-items:center;font-size:11.5px;font-weight:900;margin-left:auto;
+  color:#fff;white-space:nowrap;flex:none}
 
 /* ---------- tables ---------- */
 table{width:100%;border-collapse:collapse;font-size:14.5px}
@@ -443,7 +444,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v46';   // bump together with V in sw.js
+const BUILD='v47';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -1058,10 +1059,9 @@ function viewGame(st){
     const col=b>=85?'var(--acc)':b>=70?'var(--warn)':'var(--bad)';
     return `<div class="court ${c.locked?'locked':''}">
       <div class="court-h">
-        <span class="cn">Court ${i+1}${S.settings.pairing==='level'?`<span class="ctier">${courtTiers(c)}</span>`:''}</span>
+        <span class="cn">Court ${i+1}</span>${S.settings.pairing==='level'?`<span class="ctier">${courtTiers(c)}</span>`:''}
         ${c.forced?'<span class="tag b">Forced</span>':''}
-        <span class="bal" style="color:${col}">${draft?lbl.slice(0,2):lbl} ${b}%
-          <span class="balbar"><i style="width:${b}%;background:${col}"></i></span></span>
+        <span class="bal" style="color:${col}">${draft?lbl.slice(0,2):lbl} ${b}%</span>
       </div>
       <div class="court-b">
         ${teamBlock(c,'a',i)}
@@ -1190,9 +1190,8 @@ function viewRolling(st){
     const ready = c.winner && (winsOnly() || hasScore(c));
     return `<div class="court">
       <div class="court-h">
-        <span class="cn">Court ${i+1}${S.settings.pairing==='level'?`<span class="ctier">${courtTiers(c)}</span>`:''}</span>
-        <span class="bal" style="color:${col}">${lbl} ${b}%
-          <span class="balbar"><i style="width:${b}%;background:${col}"></i></span></span>
+        <span class="cn">Court ${i+1}</span>${S.settings.pairing==='level'?`<span class="ctier">${courtTiers(c)}</span>`:''}
+        <span class="bal" style="color:${col}">${lbl} ${b}%</span>
       </div>
       <div class="court-b">
         ${team(c,'a',i)}
