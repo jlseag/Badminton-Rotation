@@ -212,6 +212,33 @@ nav button.on{color:var(--court);background:rgba(14,138,79,.11)}
 .ctier{flex:1 1 100%;order:3;font-family:Nunito,sans-serif;font-weight:800;font-size:11px;
   color:rgba(255,255,255,.8);letter-spacing:.3px;white-space:normal;margin-top:1px}
 .court-b{padding:14px}
+/* The result of the match just saved on a court. The next four are ALREADY
+   drawn underneath -- this only covers them -- so the panel can name who is
+   coming on, and a host who puts the phone down mid-flow leaves nothing
+   undecided. Dismissing it uncovers the court card, nothing more. */
+.court.saved{border-color:var(--court);border-width:3px;
+  box-shadow:0 2px 0 var(--line2),0 10px 26px rgba(15,36,25,.16)}
+.res-row{display:flex;align-items:center;gap:12px;border:2px solid var(--line);
+  border-radius:var(--r-sm);padding:13px 14px;background:#F7FBF6}
+.res-row.w{background:#E8F6ED;border-color:var(--court)}
+.res-row+.res-row{margin-top:8px}
+.res-nm{flex:1 1 auto;min-width:0;display:flex;flex-direction:column}
+.res-nm b{font-weight:900;font-size:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.res-row.l .res-nm b{color:var(--ink2)}
+.res-tag{font-size:10px;font-weight:900;letter-spacing:.09em;color:var(--court-d);margin-top:3px}
+.res-sc{font-family:Fredoka,sans-serif;font-weight:600;font-size:32px;line-height:1;flex:none}
+.res-row.w .res-sc{color:var(--court-d)}
+.res-row.l .res-sc{color:var(--ink3)}
+.res-div{display:flex;align-items:center;gap:10px;margin:17px 0 11px}
+.res-div i{flex:1 1 auto;height:2px;background:var(--line);border-radius:2px}
+.res-div span{font-size:10.5px;font-weight:900;letter-spacing:.09em;color:var(--court);white-space:nowrap}
+.res-next{display:flex;align-items:center;gap:10px}
+.res-next .side{flex:1 1 0;min-width:0;background:#F7FBF6;border:2px solid var(--line);
+  border-radius:var(--r-sm);padding:11px 12px}
+.res-next .side div{display:flex;align-items:center;gap:7px;font-weight:900;font-size:14.5px;
+  min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.res-next .side div+div{margin-top:6px}
+.res-vs{font-family:Fredoka,sans-serif;font-weight:600;font-size:12px;color:var(--ink2);flex:none}
 .team{border:2px solid var(--line);border-bottom-width:3px;border-radius:var(--r-sm);padding:12px;
   background:var(--white);display:block;width:100%;text-align:left}
 .team.win{border-color:var(--court);background:#EAF7EF;box-shadow:0 0 0 3px rgba(14,138,79,.15)}
@@ -444,7 +471,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v51';   // bump together with V in sw.js
+const BUILD='v52';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -474,6 +501,11 @@ function defState(){return{
   }
 };}
 let S=defState(), tab='game', sel=null, dragId=null, editRound=null;
+/* Courts currently showing the result of the match just saved on them:
+   court index -> that match's index in S.matches. Deliberately NOT part of S:
+   it is a transient reading of what just happened, and a reload should land
+   the host on the live courts rather than on a stale result. */
+let savedPanel={};
 
 function save(){try{localStorage.setItem(LS,JSON.stringify(S))}catch(e){}}
 function load(){
@@ -1203,6 +1235,56 @@ function viewRolling(st){
       <div class="mini" style="margin-top:4px">${w?'WINNER':l?'':'Tap if they win'}</div></button>`;
   };
 
+  /* Court i is showing the result of match `idx`. The four underneath were
+     drawn the moment the result was saved, so they can be named here. */
+  const resultPanel = (idx, i) => {
+    const m = (S.matches || [])[idx];
+    if(!m) return null;
+    const w = m.winner === 'a' ? m.a : m.b, l = m.winner === 'a' ? m.b : m.a;
+    const scored = m.winScore != null && m.loseScore != null;
+    const c = (S.courts || [])[i];
+    const names = ids => ids.map(id =>
+      `<div><i class="tdot" data-tier="${tierOf(P(id))}"></i>${esc(nameOf(id))}</div>`).join('');
+    return `<div class="court saved">
+      <div class="court-h">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
+          stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
+          style="flex:none"><path d="M4 12.5l5.5 5.5L20 7"/></svg>
+        <span class="cn">Court ${i+1} \u00b7 match saved</span>
+      </div>
+      <div class="court-b">
+        <div class="res-row w">
+          <div class="res-nm"><b>${esc(teamName(w))}</b><span class="res-tag">WINNER</span></div>
+          ${scored ? `<div class="res-sc">${m.winScore}</div>`
+            : `<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="var(--court-d)"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
+                 style="flex:none"><path d="M7 4h10v5a5 5 0 01-10 0z"/><path d="M7 5H4v2a3 3 0 003 3"/>
+                 <path d="M17 5h3v2a3 3 0 01-3 3"/><path d="M9 20h6"/><path d="M12 14v6"/></svg>`}
+        </div>
+        <div class="res-row l">
+          <div class="res-nm"><b>${esc(teamName(l))}</b></div>
+          ${scored ? `<div class="res-sc">${m.loseScore}</div>` : ''}
+        </div>
+        ${c ? `<div class="res-div"><i></i><span>NEXT ON COURT ${i+1}</span><i></i></div>
+          <div class="res-next">
+            <div class="side">${names(c.a)}</div>
+            <div class="res-vs">VS</div>
+            <div class="side">${names(c.b)}</div>
+          </div>`
+            : `<div class="res-div"><i></i><span>COURT ${i+1}</span><i></i></div>
+          <div class="mini" style="text-transform:none;letter-spacing:0;text-align:center;padding:2px 4px">${
+            queue.length >= 4
+              ? 'Everyone free has just played here together \u2014 this court fills when another finishes, so the groups mix.'
+              : 'Waiting for four free players.'}</div>`}
+        <button class="btn pri full" style="margin-top:14px" onclick="dismissResult(${i})">Next teams</button>
+        <div class="row" style="gap:9px;margin-top:9px">
+          <button class="btn sm" style="flex:1" onclick="editMatchDialog(${idx})">Edit result</button>
+          <button class="btn sm dan" style="flex:1" onclick="undoSavedMatch(${i})">Undo</button>
+        </div>
+      </div>
+    </div>`;
+  };
+
   const courtCard = (c, i) => {
     if(!c){
       const held = queue.length >= 4;
@@ -1238,13 +1320,17 @@ function viewRolling(st){
 
   return `
   <div class="card tight">
-    <div class="row"><span class="mini" style="color:var(--court)">Next up</span>
-      <span class="sp"></span><span class="mini">${queue.length} waiting</span></div>
+    <div class="row"><span class="mini" style="color:var(--court)">Waiting</span>
+      <span class="sp"></span><span class="mini">${queue.length} in the queue</span></div>
     ${(() => {
       if(!queue.length) return '<div class="mini" style="margin-top:8px">Everyone is on court.</div>';
-      // Only the four who go on at the next court finish. With 20+ waiting the
-      // full list would push every court off the screen, and the court that
-      // just finished is the urgent thing, not the queue.
+      // The FRONT of the queue, not a prediction. This used to be labelled
+      // "Next up" and claimed to be the four who go on at the next finish, but
+      // chooseFour weighs skill grouping and variety as well as waiting time
+      // and need not pick them -- measured at 20 players on 3 courts, it named
+      // somebody who did not go on in 83% of changeovers. Who actually comes
+      // on is now shown on the result panel, where it is known rather than
+      // guessed, so this is free to be an honest queue again.
       const shown = queue.slice(0, 4);
       return `<div class="row wrap" style="margin-top:8px">${shown.map(qPill).join('')}</div>` +
         (queue.length > 4
@@ -1261,7 +1347,10 @@ function viewRolling(st){
 
   ${Array.from({length:Math.max(want, (S.courts||[]).length)}, (_,i) => i)
       .filter(i => i < want)
-      .map(i => courtCard((S.courts||[])[i], i)).join('')}
+      .map(i => {
+        const idx = savedPanel[i];
+        return (idx != null && resultPanel(idx, i)) || courtCard((S.courts||[])[i], i);
+      }).join('')}
 
   ${endBtn()}`;
 }
@@ -1976,6 +2065,7 @@ function setStyle(v){
 }
 function applyStyle(v){
   S.settings.style=v;
+  savedPanel={};                     // the other style has no courts to cover
   if(v==='rolling'){ S.current=null; S.courts=[]; if(S.started)fillCourts(); }
   else { S.courts=[]; }
   sel=null;render();
@@ -2011,7 +2101,7 @@ function clearResults(){
   S.courts=[]; S.matches=[]; S.recentQuads={}; // rolling
   S.forced={pairs:[],match:null}; S.locks=[];
   S.players.forEach(p=>{ p.qg=0; p.lastPlayed=0; });
-  editRound=null; sel=null;
+  editRound=null; sel=null; savedPanel={};
 }
 function startSession(){
   if(!S.players.length)return;
@@ -2442,9 +2532,35 @@ function finishMatch(i){
 
   S.courts[i] = null;
   fillCourts(played);
+  // The next four are drawn FIRST, then covered by the result panel, so the
+  // panel can name them and nothing is left undecided if the host walks away.
+  savedPanel[i] = S.matches.length - 1;
   sel = null;
   render();
-  toast('Match saved');
+}
+
+/* Uncover the court. The teams were never held back, only hidden. */
+function dismissResult(i){ delete savedPanel[i]; render(); }
+
+/* Undo the match this panel is showing -- not merely the newest one, since
+   another court may have finished since. The four go back into the queue and
+   the court is drawn again. */
+function undoSavedMatch(i){
+  const idx = savedPanel[i], ms = S.matches || [];
+  const m = ms[idx];
+  if(!m){ delete savedPanel[i]; render(); return; }
+  ask('The four who played it go back into the queue and the court is drawn again.',
+      'Undo this match', () => {
+    ms.splice(idx, 1);
+    [...m.a, ...m.b].forEach(id => { const p = P(id); if(p && p.qg) p.qg--; });
+    // every other panel pointing past the removed match shifts down with it
+    Object.keys(savedPanel).forEach(k => {
+      if(savedPanel[k] === idx) delete savedPanel[k];
+      else if(savedPanel[k] > idx) savedPanel[k]--;
+    });
+    S.courts[i] = null;
+    fillCourts(); render(); toast('Match removed');
+  });
 }
 
 /* Away. The host decides; the system simply stops picking them.
