@@ -444,7 +444,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v50';   // bump together with V in sw.js
+const BUILD='v51';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -2236,7 +2236,19 @@ function chooseFour(order, st, str){
   // Advanced, or -- when only two Advanced are free -- Advanced plus the two
   // nearest below them, rather than an Advanced beside a Beginner.
   // Fairness still leads: the window is chosen mostly on games played.
-  if(level){
+  /* Windows only work when there are enough of them.
+     A window is four CONTIGUOUS players in the skill order, so a free pool of
+     L gives L-3 windows -- and a player at rank r sits in every one of them
+     when r <= 3 and r >= L-4, which is possible exactly while L <= 7. At that
+     size the optimiser cannot leave that player out however many games they
+     have played, because there is no window without them. Measured at seven
+     players: #4 played all sixty matches and never once sat down, while #1
+     and #7 played twenty-four. Five and six players are worse still.
+     Below the threshold we fall through to the general selection, which is
+     fairness-first and still applies spreadCost() to keep the four close in
+     skill -- grouping by preference rather than by construction. */
+  const WINDOW_MIN = 8;          // need at least this many free for windows
+  if(level && order.length >= WINDOW_MIN){
     const byRank = order.slice().sort((a,b)=>rank[a]-rank[b]);
     // Whoever is at the front of the fairness queue plays, full stop. The
     // window is chosen AROUND them. Without this hard floor, skill grouping
@@ -2257,8 +2269,34 @@ function chooseFour(order, st, str){
         const pl = P(id); return t + (n - (pl ? (pl.lastPlayed||0) : 0));
       },0);
       const gap  = tierGap(four);
+      /* Leaving the front of the queue out gets dearer the longer they have
+         been sitting. A flat 2500 was no match for the gap*gap*800 charged
+         for a wide court -- 7200 for a three-tier gap -- so a lone Beginner
+         among Advanced, who appears in only one window and an expensive one,
+         was passed over again and again: measured at seventeen matches on the
+         trot without a game. Squared and capped, the charge overtakes even the
+         widest gap after a handful of rotations, which bounds the wait without
+         giving up skill grouping the rest of the time. */
+      const frontWait = (()=>{ const pl = P(front);
+        return Math.min(12, pl ? (n - (pl.lastPlayed || 0)) : 0) })();
+      /* And the same charge for whoever has waited longest of everyone left
+         out, because the front of the queue is not always the one stranded:
+         with many players to few courts, Same level could leave somebody
+         sitting for fifteen matches while the standings stayed level, where
+         Social mix on the same roster left nobody more than five. */
+      let outWait = 0;
+      {
+        const inFour = new Set(four);
+        order.forEach(id => {
+          if(inFour.has(id)) return;
+          const pl = P(id), w = pl ? (n - (pl.lastPlayed || 0)) : 0;
+          if(w > outWait) outWait = w;
+        });
+        if(outWait > 12) outWait = 12;
+      }
       const cost = qsum * 1000
-                 + (four.includes(front) ? 0 : 2500)
+                 + (four.includes(front) ? 0 : 2500 + frontWait * frontWait * 200)
+                 + outWait * outWait * 120
                  + gap * gap * 800
                  + quadStale(four) * QUAD_W
                  + r.cost - 25 * wait;
