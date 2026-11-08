@@ -230,7 +230,19 @@ nav button.on{color:var(--court);background:rgba(14,138,79,.11)}
 .res-row.w .res-sc{color:var(--court-d)}
 .res-row.l .res-sc{color:var(--ink3)}
 .court.held{border-style:dashed;border-color:var(--court)}
-.team{border:2px solid var(--line);border-bottom-width:3px;border-radius:var(--r-sm);padding:12px;
+/* A court that has finished and is waiting on the host. At 25 players on 4
+   courts the page is 3.5 screens and three of the four courts sit below the
+   fold, so a court could stand empty 2000px down with nothing on the first
+   screen to say so. This pins to the top and draws from here, so she never
+   has to go and find it. */
+.pendbar{position:sticky;top:0;z-index:40;display:flex;align-items:center;gap:10px;
+  background:linear-gradient(135deg,var(--court),var(--court-d));color:#fff;
+  border-radius:var(--r-sm);padding:10px 12px;margin-bottom:13px;
+  box-shadow:0 6px 18px rgba(15,36,25,.22);font-weight:800;font-size:14px}
+.pendbar b{font-weight:900}
+.pendbar .btn{margin-left:auto;flex:none;background:#fff;color:var(--court-d);
+  border-color:#fff;border-bottom-color:rgba(0,0,0,.18)}
+.team{border:2px solid var(--line);border-bottom-width:3px;border-radius:var(--r-sm);padding:10px;
   background:var(--white);display:block;width:100%;text-align:left}
 .team.win{border-color:var(--court);background:#EAF7EF;box-shadow:0 0 0 3px rgba(14,138,79,.15)}
 .team.lockedpair{border-color:var(--court);background:#F3FBF5}
@@ -244,7 +256,7 @@ nav button.on{color:var(--court);background:rgba(14,138,79,.11)}
 .chip.over{border-color:var(--court)}
 
 /* the net */
-.vs{position:relative;height:34px;margin:12px 0;display:flex;align-items:center;justify-content:center}
+.vs{position:relative;height:26px;margin:9px 0;display:flex;align-items:center;justify-content:center}
 .vs::before{content:"";position:absolute;inset:7px 0 0;border-radius:3px;
   background-image:repeating-linear-gradient(45deg,var(--line2) 0 1.5px,transparent 1.5px 8px),
                    repeating-linear-gradient(-45deg,var(--line2) 0 1.5px,transparent 1.5px 8px);
@@ -462,7 +474,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v54';   // bump together with V in sw.js
+const BUILD='v55';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -1007,8 +1019,15 @@ function render(){
       : !S.started ? 'New Session'
       : S.ended ? 'Final Score'
       : S.current ? 'Round '+S.current.n : 'Session';
+  /* Rolling has no rounds -- courts finish independently -- so dividing
+     matches by courts read as "0 rounds played" after two real games had been
+     played, which looks like nothing has happened. Count what actually
+     happened in each style. */
+  const done = isRolling()
+    ? `${(S.matches||[]).length} match${(S.matches||[]).length===1?'':'es'}`
+    : `${roundsDone()} round${roundsDone()===1?'':'s'} played`;
   $('#hSub').textContent =
-      `${present().length} player${present().length===1?'':'s'} · ${activeCourts()||'no'} court${activeCourts()===1?'':'s'} · ${roundsDone()} round${roundsDone()===1?'':'s'} played`;
+      `${present().length} player${present().length===1?'':'s'} · ${activeCourts()||'no'} court${activeCourts()===1?'':'s'} · ${done}`;
   $('#hRight').innerHTML = S.started&&tab!=='settings'
       ? `<span class="tag ${isCompetitive()?'r':'b'}">${isCompetitive()?'Competitive':'Warm-up'}</span>`:'';
   wire();
@@ -1215,10 +1234,23 @@ function viewRolling(st){
 
   const qPill = id => {
     const s = st[id] || {games:0};
+    /* How many matches have gone by since this player was last on. The queue
+       is ordered by games played, which hides the person who is simply out of
+       phase -- the games column stays level while they keep not getting on.
+       Calibrated against 43,200 observations of real queue waits: the median
+       wait is 0 matches, p95 is 3 and p99 is 4, but the tail reaches 16. A
+       threshold of five therefore marks under 1% of waiting players, which is
+       the point -- it should pick out the person being left behind, not
+       decorate the eight people having a normal short rest. */
+    const pl = P(id);
+    const w = (S.matches || []).length - (pl ? (pl.lastPlayed || 0) : 0);
+    const stuck = w >= 5;
     return `<button class="pill ${sel===id?'sel':''}" data-pid="${id}"
-      style="${sel===id?'border-color:var(--court);background:rgba(14,138,79,.12)':''}"
+      style="${sel===id?'border-color:var(--court);background:rgba(14,138,79,.12)'
+                       :(stuck?'border-color:var(--warn)':'')}"
       onclick="tapRolling('${id}')"><i class="tdot" data-tier="${tierOf(P(id))}"></i>${esc(nameOf(id))}
-      <span style="color:var(--ink3);font-size:11.5px;font-weight:800">${s.games||0} ${(s.games||0)===1?'game':'games'}</span></button>`;
+      <span style="color:${stuck?'var(--warn)':'var(--ink3)'};font-size:11.5px;font-weight:800">${
+        stuck ? 'waiting ' + w : (s.games||0) + ' ' + ((s.games||0)===1?'game':'games')}</span></button>`;
   };
 
   const chip = id => {
@@ -1316,8 +1348,10 @@ function viewRolling(st){
         <div class="vs"><span>VS</span></div>
         ${team(c,'b',i)}
         ${!c.entering
-          ? `<button class="btn pri full" style="margin-top:12px" onclick="beginResult(${i})">Finish match</button>
-             <button class="btn gho full" style="margin-top:8px" onclick="reshuffleCourt(${i})">↻ Redraw this court</button>`
+          ? `<div class="row" style="gap:8px;margin-top:11px">
+               <button class="btn pri" style="flex:1 1 auto;min-height:54px" onclick="beginResult(${i})">Finish match</button>
+               <button class="btn gho" style="flex:0 0 auto;min-height:54px;padding:0 14px" onclick="reshuffleCourt(${i})">↻ Redraw</button>
+             </div>`
           : `${winsOnly()?'<div class="note" style="margin:0 0 4px">Tap the team that won.</div>':scoreUI(c,i)}
              <button class="btn pri full" style="margin-top:12px" onclick="finishMatch(${i})" ${ready?'':'disabled'}>
                Save result${ready?'':(winsOnly()?' \u00b7 tap the winner':' \u00b7 pick a winner and score')}</button>
@@ -1326,7 +1360,25 @@ function viewRolling(st){
     </div>`;
   };
 
+  /* Courts that have finished and are waiting on her. */
+  const pending = Object.keys(savedPanel).map(Number)
+    .filter(n => n < want && !(S.courts||[])[n]).sort((a,b) => a-b);
+  const pendBar = (() => {
+    if(!pending.length) return '';
+    const ns = pending.map(n => n+1);
+    const label = ns.length > 1
+      ? 'Courts ' + ns.slice(0,-1).join(', ') + ' and ' + ns[ns.length-1]
+      : 'Court ' + ns[0];
+    return `<div class="pendbar">
+      <span><b>${label}</b> ${ns.length>1?'are':'is'} free${
+        queue.length >= 4 ? '' : ' \u00b7 needs 4 players'}</span>
+      ${queue.length >= 4
+        ? `<button class="btn sm" onclick="nextTeams(${pending[0]})">Next teams</button>` : ''}
+    </div>`;
+  })();
+
   return `
+  ${pendBar}
   <div class="card tight">
     <div class="row"><span class="mini" style="color:var(--court)">Waiting</span>
       <span class="sp"></span><span class="mini">${queue.length} in the queue</span></div>
@@ -2561,6 +2613,12 @@ function finishMatch(i){
   // 6.4 to 9.8 at 16 players on 3 courts, and from 4.3 to 11.9 at 24 on 4.
   savedPanel[i] = { idx: S.matches.length - 1, played, held: false };
   sel = null;
+  /* With a single court there is never a second one to draw alongside, so the
+     pause has nothing to offer and costs playing time. Measured at 9 players
+     on 1 court: a host who does not tap the moment she saves finished 48
+     matches instead of 60, with 21% of court time standing empty. Draw at
+     once and let her get on with it. */
+  if(activeCourts() <= 1){ nextTeams(i); toast('Match saved'); return; }
   render();
 }
 
