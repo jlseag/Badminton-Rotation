@@ -229,19 +229,7 @@ nav button.on{color:var(--court);background:rgba(14,138,79,.11)}
 .res-sc{font-family:Fredoka,sans-serif;font-weight:600;font-size:32px;line-height:1;flex:none}
 .res-row.w .res-sc{color:var(--court-d)}
 .res-row.l .res-sc{color:var(--ink3)}
-.res-div{display:flex;align-items:center;gap:10px;margin:17px 0 11px}
-.res-div i{flex:1 1 auto;height:2px;background:var(--line);border-radius:2px}
-.res-div span{font-size:10.5px;font-weight:900;letter-spacing:.09em;color:var(--court);white-space:nowrap}
 .court.held{border-style:dashed;border-color:var(--court)}
-.res-pool{text-align:center;font-weight:800;font-size:13.5px;color:var(--ink2);padding:1px 4px 0}
-.res-pool b{font-family:Fredoka,sans-serif;font-weight:600;font-size:18px;color:var(--court-d)}
-.res-next{display:flex;align-items:center;gap:10px}
-.res-next .side{flex:1 1 0;min-width:0;background:#F7FBF6;border:2px solid var(--line);
-  border-radius:var(--r-sm);padding:11px 12px}
-.res-next .side div{display:flex;align-items:center;gap:7px;font-weight:900;font-size:14.5px;
-  min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.res-next .side div+div{margin-top:6px}
-.res-vs{font-family:Fredoka,sans-serif;font-weight:600;font-size:12px;color:var(--ink2);flex:none}
 .team{border:2px solid var(--line);border-bottom-width:3px;border-radius:var(--r-sm);padding:12px;
   background:var(--white);display:block;width:100%;text-align:left}
 .team.win{border-color:var(--court);background:#EAF7EF;box-shadow:0 0 0 3px rgba(14,138,79,.15)}
@@ -474,7 +462,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v53';   // bump together with V in sw.js
+const BUILD='v54';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -1260,12 +1248,6 @@ function viewRolling(st){
     if(!m) return null;
     const w = m.winner === 'a' ? m.a : m.b, l = m.winner === 'a' ? m.b : m.a;
     const scored = m.winScore != null && m.loseScore != null;
-    // Which other courts are still playing, and which is she already holding
-    const live = (S.courts || []).map((cc,j) => (cc && j !== i) ? j+1 : 0).filter(Boolean);
-    const alsoHeld = Object.keys(savedPanel)
-      .filter(k => +k !== i && savedPanel[k].held).map(k => +k+1);
-    const nm = ns => ns.length > 1
-      ? ns.slice(0,-1).join(', ') + ' or ' + ns[ns.length-1] : String(ns[0]);
     return `<div class="court saved">
       <div class="court-h">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
@@ -1286,42 +1268,30 @@ function viewRolling(st){
           <div class="res-nm"><b>${esc(teamName(l))}</b></div>
           ${scored ? `<div class="res-sc">${m.loseScore}</div>` : ''}
         </div>
-        <div class="res-div"><i></i><span>COURT ${i+1} IS FREE</span><i></i></div>
-        <div class="res-pool"><b>${queue.length}</b> waiting${
-          live.length ? ` \u00b7 court ${nm(live)} still playing` : ''}</div>
         ${queue.length >= 4
-          ? `<button class="btn pri full" style="margin-top:13px" onclick="nextTeams(${i})">Next teams${
-              alsoHeld.length ? ` \u00b7 and court ${nm(alsoHeld)}` : ''}</button>`
-          : `<div class="mini" style="text-transform:none;letter-spacing:0;text-align:center;padding:9px 4px 2px">
+          ? `<button class="btn pri full" style="margin-top:12px" onclick="nextTeams(${i})">Next teams</button>`
+          : `<div class="mini" style="text-transform:none;letter-spacing:0;text-align:center;padding:11px 4px 3px">
               A court needs four free players.</div>`}
-        ${live.length ? `<button class="btn gho full" style="margin-top:8px" onclick="holdCourt(${i})">
-            Wait for court ${nm(live)}</button>` : ''}
-        <div class="row" style="gap:9px;margin-top:9px">
-          <button class="btn sm" style="flex:1" onclick="editMatchDialog(${idx})">Edit result</button>
-          <button class="btn sm dan" style="flex:1" onclick="undoSavedMatch(${i})">Undo</button>
-        </div>
       </div>
     </div>`;
   };
 
-  /* A court the host is deliberately holding. The result is already saved and
-     counted; only the draw is waiting, so this card is about the wait. */
-  const heldCard = i => {
-    const live = (S.courts || []).map((cc,j) => (cc && j !== i) ? j+1 : 0).filter(Boolean);
-    return `<div class="court held">
+  /* A court the draw could not fill -- either fewer than four free, or the
+     clique guard holding it so the groups mix. It keeps a card with a button
+     so the host is never looking at an empty court she cannot act on. */
+  const heldCard = i => `<div class="court held">
       <div class="court-h"><span class="cn">Court ${i+1}</span>
-        <span class="bal" style="color:var(--acc)">\u23f8 waiting</span></div>
+        <span class="bal" style="color:var(--acc)">waiting</span></div>
       <div class="court-b">
         <div class="empty" style="padding:20px 10px">
-          <b>Held on purpose</b>
-          ${live.length
-            ? `The next teams will be drawn when court ${live.join(' or ')} finishes, from the bigger pool.`
-            : 'Ready to draw whenever you are.'}
-          ${queue.length} waiting.
+          <b>${queue.length >= 4 ? 'Waiting to mix' : 'Waiting for players'}</b>
+          ${queue.length >= 4
+            ? 'Everyone free has just played here together. It fills when another court finishes, so the groups mix.'
+            : 'A court needs four free players.'}
         </div>
-        <button class="btn pri full" style="margin-top:4px" onclick="nextTeams(${i})">Draw now</button>
+        ${queue.length >= 4
+          ? `<button class="btn pri full" style="margin-top:4px" onclick="nextTeams(${i})">Draw now</button>` : ''}
       </div></div>`;
-  };
 
   const courtCard = (c, i) => {
     if(!c){
@@ -2597,23 +2567,23 @@ function finishMatch(i){
 /* Draw this court now -- together with every court the host is holding, from
    one combined pool. This is the whole point of the pause. */
 function nextTeams(i){
-  const idxs = [], jf = [], taken = {};
-  const take = n => {
-    const ps = savedPanel[n]; if(!ps || idxs.indexOf(n) >= 0) return;
-    taken[n] = ps; idxs.push(n);
-    if(ps.played) jf.push(...ps.played);
-  };
-  take(i);
-  Object.keys(savedPanel).forEach(k => { const n = +k; if(n !== i && savedPanel[k].held) take(n); });
-  /* Sweep up any court standing empty with nothing to explain it. Until v52
-     every save ran fillCourts() over all courts, which quietly repaired a
-     court an earlier draw had failed to fill. Nothing does that now, so this
-     is where a stray empty court gets picked up. */
-  const want = activeCourts();
-  (S.courts || []).forEach((c, n) => {
-    if(!c && n < want && !savedPanel[n] && idxs.indexOf(n) < 0) idxs.push(n);
+  /* EVERY court standing free is drawn in this one decision.
+     v53 only swept in courts the host had tapped a Wait button on, which made
+     two identical situations behave differently: a court she had deliberately
+     held joined the joint draw, while one she had simply not got to yet did
+     not -- though both were sitting there empty in front of her. Not tapping
+     IS waiting; the panel is the pause. So the button went and this takes
+     every free court instead, which is also what makes the joint draw happen
+     by itself whenever two courts finish close together. */
+  const want = activeCourts(), idxs = [], jf = [], taken = {};
+  (S.courts || []).forEach((c, n) => { if(!c && n < want) idxs.push(n); });
+  if(i < want && idxs.indexOf(i) < 0) idxs.push(i);
+  idxs.sort((a,b) => a-b);
+  idxs.forEach(n => {
+    const ps = savedPanel[n];
+    if(ps){ taken[n] = ps; if(ps.played) jf.push(...ps.played); }
+    delete savedPanel[n];
   });
-  idxs.forEach(n => { delete savedPanel[n]; });
   drawCourts(idxs, jf);
   /* A court the draw could not fill keeps a card, so the host is never left
      looking at an empty court with no button on it. */
@@ -2623,15 +2593,9 @@ function nextTeams(i){
   });
   sel = null;
   render();
-}
-
-/* Keep this court empty until she is ready. The result is already saved; only
-   the draw is deferred. */
-function holdCourt(i){
-  const ps = savedPanel[i]; if(!ps) return;
-  ps.held = true;
-  render();
-  toast('Court ' + (i+1) + ' is being held');
+  const drawn = idxs.filter(n => S.courts[n]);
+  if(drawn.length > 1)
+    toast('Courts ' + drawn.map(n => n+1).join(' and ') + ' drawn together');
 }
 
 /* Cost of one foursome, built from the same ingredients chooseFour uses so a
