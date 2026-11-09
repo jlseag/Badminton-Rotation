@@ -474,7 +474,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v55';   // bump together with V in sw.js
+const BUILD='v56';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -489,21 +489,17 @@ function defState(){return{
   v:1, started:false, ended:false, queueOpen:false,
   players:[],                 // {id,name,tier,away,qg,lastPlayed} — array order IS the
                               // skill ranking, and the only thing that sets level
-  rounds:[],                  // Synchronised: finished rounds
-  current:null,               // Synchronised: draft/active round
-  courts:[],                  // Rolling: one independent match per court (or null)
-  matches:[],                 // Rolling: finished matches, oldest first
+  courts:[],                  // one independent match per court (or null)
+  matches:[],                 // finished matches, oldest first
   recentQuads:{},             // foursome -> match index it last played, for variety
-  forced:{pairs:[],match:null},
-  locks:[],                   // [[idA,idB],...] — locked partners, kept every round until unlocked
   settings:{
     courts:2, mode:'firstto', total:21, earlyRounds:4,
-    style:'rolling', scoring:'wins',
-    partnerStrict:4, oppStrict:3, balance:3, restFair:4,
+    scoring:'wins',
+    partnerStrict:4, oppStrict:3, balance:3,
     pairing:'level', rankBy:'points', allowOverride:false, noise:3
   }
 };}
-let S=defState(), tab='game', sel=null, dragId=null, editRound=null;
+let S=defState(), tab='game', sel=null, dragId=null;
 /* Courts currently showing the result of the match just saved on them:
    court index -> that match's index in S.matches. Deliberately NOT part of S:
    it is a transient reading of what just happened, and a reload should land
@@ -529,10 +525,6 @@ function load(){
       if(o.settings){                       // pre-existing session: don't change its rules
         if(o.settings.mode===undefined)S.settings.mode='combined';
         if(o.settings.pairing===undefined)S.settings.pairing='social';
-        // A session saved before Rolling existed is a Synchronised one. Left
-        // to default it would come back as Rolling mid-round and lose its
-        // place entirely.
-        if(o.settings.style===undefined)S.settings.style='sync';
       }
       S.courts=Array.isArray(o.courts)?o.courts:[];
       S.recentQuads=(o.recentQuads&&typeof o.recentQuads==='object')?o.recentQuads:{};
@@ -543,20 +535,53 @@ function load(){
         if(p.qg===undefined)p.qg=0;
         if(p.lastPlayed===undefined)p.lastPlayed=0;
       });
-      S.forced=Object.assign({pairs:[],match:null},o.forced||{});
-      S.locks=Array.isArray(o.locks)?o.locks.filter(x=>Array.isArray(x)&&x.length===2):[];
       S.players.forEach(p=>{if(p.tier==='new')p.tier='beg';
         if(!TIERS.some(x=>x[0]===p.tier))p.tier='int'});
       // sessions saved before scoring modes existed only stored the winner's score
       const T=S.settings.total;
-      (S.rounds||[]).forEach(r=>(r.courts||[]).forEach(c=>{
-        if(c.loseScore==null&&c.winScore!=null)c.loseScore=T-c.winScore;}));}
+      const fixScore=c=>{ if(c.loseScore==null&&c.winScore!=null)c.loseScore=T-c.winScore };
+      S.matches.forEach(fixScore);
+      /* Synchronised mode is gone. A session saved under it kept its results
+         in o.rounds, which nothing reads any more, so its leaderboard and its
+         history would come back empty. A finished round is just a handful of
+         matches that happened at the same time, so flatten them into
+         S.matches in the order they were played and the standings survive
+         intact. Rounds carry no clock, so those rows show no time, and the
+         resting list is dropped -- nothing reads it now rounds are not drawn. */
+      const syncRounds = Array.isArray(o.rounds) ? o.rounds.slice() : [];
+      /* A round she had confirmed but not yet finished holds real results on
+         any court she had already scored -- tapping Finish Round was all that
+         stood between them and the leaderboard. Carry those across rather
+         than throw away games people actually played. A court with no winner
+         yet was still in play and has nothing to record. */
+      if(o.current && o.current.confirmed && Array.isArray(o.current.courts)){
+        const done=o.current.courts.filter(c=>c&&c.winner);
+        if(done.length) syncRounds.push({n:o.current.n, resting:[], courts:done});
+      }
+      if(syncRounds.length){
+        const moved=[];
+        syncRounds.forEach(r=>(r.courts||[]).forEach((c,ci)=>{
+          if(!c||!Array.isArray(c.a)||!Array.isArray(c.b))return;
+          fixScore(c);
+          moved.push({at:null, court:ci+1, a:[...c.a], b:[...c.b],
+                      winner:c.winner, winScore:c.winScore, loseScore:c.loseScore});
+        }));
+        S.matches=moved.concat(S.matches);
+        /* The queue clock has to agree with the history it was just handed or
+           everyone looks like they have played nothing, and the first draws of
+           the evening are nonsense. */
+        const seen={};
+        S.matches.forEach(m=>[...m.a,...m.b].forEach(id=>{seen[id]=(seen[id]||0)+1}));
+        S.players.forEach(p=>{ p.qg=seen[p.id]||0; p.lastPlayed=0 });
+        S.matches.forEach((m,i)=>[...m.a,...m.b].forEach(id=>{
+          const p=P(id); if(p)p.lastPlayed=i+1; }));
+      }}
   }catch(e){}
   if(!S.started)tab='players';          // nothing set up yet: start on the roster
   // savedPanel is transient, so a court the host was holding has nothing left
   // to explain it after a reload. Draw it rather than leave her looking at an
   // empty court with no way to fill it.
-  if(S.started&&isRolling())fillCourts();
+  if(S.started)fillCourts();
 }
 const P=id=>S.players.find(p=>p.id===id);
 const nameOf=id=>{const p=P(id);return p?p.name:'?'};
@@ -591,29 +616,8 @@ function scoreRange(){               // [min,max] of the number the user picks
                     :[Math.floor(S.settings.total/2)+1,S.settings.total-1];
 }
 const pickedValue=c=>isFirstTo()?lossOf(c):c.winScore;
-/* locked partners — a standing rule, not a per-round flag */
-const isLockedPair=(a,b)=>S.locks.some(l=>pk(l[0],l[1])===pk(a,b));
-/* A locked pair is a standing rule, but it cannot reach someone who is not
-   here. Treating an away partner as a partner pulled them into the resting
-   list, and in Same level straight onto a court, around every present()
-   filter. The lock itself is kept, so it resumes when they come back. */
-const lockedMate=id=>{
-  const l=S.locks.find(l=>l[0]===id||l[1]===id); if(!l)return null;
-  const m = l[0]===id ? l[1] : l[0];
-  const mp = P(m);
-  return (mp && !mp.away) ? m : null;
-};
-const isLocked=id=>!!lockedMate(id);
-function setLock(a,b,on){
-  S.locks=S.locks.filter(l=>!l.includes(a)&&!l.includes(b));
-  if(on)S.locks.push([a,b]);
-}
-function pruneLocks(){S.locks=S.locks.filter(l=>l.every(id=>P(id)))}
-
-/* ---------------- derived stats (single source of truth = rounds) -------- */
-/* Rolling vs Synchronised, and who is actually here. Declared high up
-   because stats() and roundsDone() both depend on them. */
-const isRolling = () => S.settings.style === 'rolling';
+/* ---------------- derived stats (single source of truth = S.matches) ----- */
+/* Who is actually here. Declared high up because stats() depends on it. */
 // Wins only: the host taps who won and nothing else. No scores anywhere.
 const winsOnly  = () => S.settings.scoring === 'wins';
 const present   = () => S.players.filter(p => !p.away);
@@ -647,27 +651,21 @@ function stats(){
       }
     });
   };
-  if(isRolling()){
-    // A finished match is a round with one court and nobody resting, so the
-    // same apply() handles both shapes. Match index doubles as the recency
-    // clock that lastPartner/lastOpp compare against.
-    (S.matches||[]).forEach((mt,i)=>apply({n:i+1,resting:[],courts:[mt]},true));
-    // matches in progress already count for partner/opponent variety
-    const n=(S.matches||[]).length+1;
-    (S.courts||[]).forEach(c=>{if(c)apply({n,resting:[],courts:[c]},false)});
-  }else{
-    S.rounds.forEach(r=>apply(r,true));
-    // a confirmed (but unfinished) round already counts for partner/opponent/rest history
-    if(S.current&&S.current.confirmed)apply(S.current,false);
-  }
+  // A finished match is a round with one court and nobody resting, so the
+  // same apply() handles both shapes. Match index doubles as the recency
+  // clock that lastPartner/lastOpp compare against.
+  (S.matches||[]).forEach((mt,i)=>apply({n:i+1,resting:[],courts:[mt]},true));
+  // matches in progress already count for partner/opponent variety
+  const n=(S.matches||[]).length+1;
+  (S.courts||[]).forEach(c=>{if(c)apply({n,resting:[],courts:[c]},false)});
   Object.values(m).forEach(s=>{s.avg=s.games?s.pts/s.games:0;s.wr=s.games?s.wins/s.games:0});
   return m;
 }
-const roundsDone=()=> isRolling()
-  ? Math.floor(((S.matches||[]).length)/Math.max(1,activeCourts()))
-  : S.rounds.length;
-const matchesDone=()=> isRolling() ? (S.matches||[]).length
-  : S.rounds.reduce((n,r)=>n+(r.courts||[]).length,0);
+/* A notional round: how many each court has got through on average. Used
+   only to decide when a session stops being a warm-up. Rolling has no rounds
+   of its own. */
+const roundsDone=()=> Math.floor(((S.matches||[]).length)/Math.max(1,activeCourts()));
+const matchesDone=()=> (S.matches||[]).length;
 const isCompetitive=()=>roundsDone()>=S.settings.earlyRounds;
 
 /* ------------- skill score, from placement alone (5-95) ------------------ */
@@ -688,264 +686,13 @@ function strengths(st){
   return out;
 }
 
-/* ---------------- resting selection -------------------------------------- */
-function pickResting(need,st,forcedIn){
-  if(need<=0)return[];
-  const rd=roundsDone(), fair=S.settings.restFair/3;
-  const score=id=>{
-    const s=st[id];
-    const sinceRest=s.lastRest==null?rd+2:rd-s.lastRest;
-    return s.games*10*fair          // played the most -> rest first
-         - s.rests*9*fair           // already rested -> rest later (no 2nd rest before 1st)
-         + Math.min(sinceRest,6)*.6
-         + Math.random()*.9;
-  };
-  // locked partners sit out together, so the lock never gets broken by a rest
-  const seen=new Set(), units=[];
-  present().forEach(p=>{                       // away players are not resting, they are gone
-    if(forcedIn.has(p.id)||seen.has(p.id))return;
-    const mate=lockedMate(p.id);
-    if(mate&&P(mate)&&!forcedIn.has(mate)&&!seen.has(mate)){
-      units.push({ids:[p.id,mate],k:(score(p.id)+score(mate))/2});
-      seen.add(p.id);seen.add(mate);
-    }else{units.push({ids:[p.id],k:score(p.id)});seen.add(p.id)}
-  });
-  units.sort((a,b)=>b.k-a.k);
-  const out=[];
-  for(const u of units){                       // skip a pair that would overshoot the quota
-    if(out.length>=need)break;
-    if(out.length+u.ids.length<=need)out.push(...u.ids);
-  }
-  if(out.length<need)                          // safety net: only reachable if every unit is a pair
-    for(const u of units)for(const id of u.ids)
-      if(out.length<need&&out.indexOf(id)<0)out.push(id);
-  return out.slice(0,need);
-}
-
-/* ---------------- matchmaking engine ------------------------------------- */
-function activeForced(){
-  const f={pairs:[],match:null};
-  const used=new Set();
-  // here() -- a forced pairing is skipped while anyone in it is away, and
-  // comes back by itself when they return. Without this the pairing was
-  // placed before resting was chosen, so it put away players on court.
-  const here = id => { const p=P(id); return !!p && !p.away; };
-  if(S.forced.match){
-    const ids=[...S.forced.match.a,...S.forced.match.b];
-    if(ids.every(here)&&new Set(ids).size===4){f.match={a:[...S.forced.match.a],b:[...S.forced.match.b]};ids.forEach(i=>used.add(i))}
-  }
-  S.forced.pairs.forEach(pr=>{
-    if(pr.every(here)&&!pr.some(id=>used.has(id))&&pr[0]!==pr[1]){f.pairs.push([...pr]);pr.forEach(i=>used.add(i))}
-  });
-  return f;
-}
-
-// Courts in Settings is a MAXIMUM — a round uses as many as the players present can fill.
 /* Courts we can actually fill. Counts who is PRESENT, not everyone on the
-   roster: with away players included, Synchronised built rounds around people
-   who had gone home (or had not arrived yet) and Away appeared to do nothing
-   in that style. */
+   roster: with away players counted, Away appeared to do nothing -- the court
+   stayed open for someone who had gone home.
+   Courts in Settings is a MAXIMUM; we only use as many as the players here
+   can fill four to a court. */
 function activeCourts(){
   return clamp(Math.min(S.settings.courts,Math.floor(present().length/4)),0,20);
-}
-
-function generateRound(keepLocks){
-  const st=stats(), str=strengths(st);
-  const courts=activeCourts();
-  if(courts<1)return{error:`A doubles court needs 4 players — you have ${present().length} here.`};
-  const need=courts*4;
-
-  const f=activeForced();
-  const fixed=[];                                   // whole courts that are pre-set
-  const pairUnits=[];                               // 2-player units that must be a team
-  const used=new Set();
-  const take=ids=>ids.forEach(i=>used.add(i));
-
-  if(keepLocks&&S.current){
-    S.current.courts.forEach(c=>{
-      const ids=[...c.a,...c.b];
-      if(c.locked&&ids.every(id=>P(id))&&!ids.some(i=>used.has(i))&&fixed.length<courts){
-        fixed.push({a:[...c.a],b:[...c.b],locked:true});take(ids);
-      }
-    });
-  }
-  if(f.match&&fixed.length<courts&&![...f.match.a,...f.match.b].some(i=>used.has(i))){
-    fixed.push({a:f.match.a,b:f.match.b,forced:true});take([...f.match.a,...f.match.b]);
-  }
-  f.pairs.forEach(pr=>{if(!pr.some(i=>used.has(i))){pairUnits.push({ids:pr,forced:true});take(pr)}});
-
-  const openCourts=courts-fixed.length;
-  const slotsFree=openCourts*2;
-  const drop=[];
-  while(pairUnits.length>slotsFree){const u=pairUnits.pop();drop.push(u);u.ids.forEach(i=>used.delete(i))}
-
-  // who is already committed to play, then choose resters (locked partners rest together)
-  const mustPlay=new Set(used);
-  const resting=pickResting(present().length-need,st,mustPlay);
-  const restSet=new Set(resting);
-
-  // every locked pair that is playing this round is a team, automatically
-  S.locks.forEach(pr=>{
-    if(pr.length!==2||!pr.every(id=>{const p=P(id);return p&&!p.away}))return;
-    if(pr.some(i=>used.has(i))||pr.some(i=>restSet.has(i)))return;
-    if(pairUnits.length>=slotsFree){drop.push({ids:pr});return}
-    pairUnits.push({ids:[...pr],lock:true});take(pr);
-  });
-
-  // stable per-pair jitter => social variety without confusing the optimiser
-  const jit={};
-  const noiseAmt=(isCompetitive()?2:6)*(S.settings.noise/3);
-  const J=(a,b)=>{const k=pk(a,b);return jit[k]!==undefined?jit[k]:(jit[k]=Math.random()*noiseAmt)};
-
-  const comp=isCompetitive();
-  const Wp=55*(S.settings.partnerStrict/3);
-  const Wo=5*(S.settings.oppStrict/3);
-  const Wb=.85*(S.settings.balance/3)*(comp?1.5:1);
-  const sortedStr=S.players.map(p=>str[p.id]).sort((a,b)=>b-a);
-  const topCut=sortedStr[Math.max(0,Math.floor(sortedStr.length*.3)-1)]||101;
-  const rd=roundsDone();
-
-  const teamPen=t=>{
-    const[x,y]=t, s=st[x];
-    let p=J(x,y);
-    const c=(s.partners[y]||0);
-    if(c)p+=Wp*(c*c*3.2);
-    const lp=s.lastPartner[y];
-    if(lp!=null)p+=Wp*Math.max(0,4-(rd-lp))*2.6;               // recently partnered = worse
-    if(comp&&str[x]>=topCut&&str[y]>=topCut)p+=18;             // split the top players up
-    return p;
-  };
-  const courtPen=c=>{
-    let p=teamPen(c.a)+teamPen(c.b);
-    c.a.forEach(x=>c.b.forEach(y=>{
-      const s=st[x], o=s.opps[y]||0;
-      if(o)p+=Wo*(o*o);
-      const lo=s.lastOpp[y];
-      if(lo!=null)p+=Wo*Math.max(0,3-(rd-lo))*1.2;
-    }));
-    const d=Math.abs(sum(c.a)-sum(c.b));
-    p+=Wb*(d+d*d/40);                                           // lopsided matches hurt fast
-    return p;
-  };
-  const sum=t=>str[t[0]]+str[t[1]];
-  const totalPen=cs=>{
-    let p=0;const sums=[];
-    cs.forEach(c=>{if(c.locked||c.forced){p+=0}else{p+=courtPen(c)}sums.push(sum(c.a),sum(c.b))});
-    const mean=sums.reduce((a,b)=>a+b,0)/sums.length;
-    const sd=Math.sqrt(sums.reduce((a,b)=>a+(b-mean)*(b-mean),0)/sums.length);
-    p+=Wb*.6*sd*sums.length/2;                                  // spread of team strengths overall
-    return p;
-  };
-
-  // ---- Same level: courts are cut straight out of the skill order ----
-  if(S.settings.pairing==='level'){
-    // present(), not S.players: an away player is never in restSet (pickResting
-    // does not consider them), so taking the whole roster here put them
-    // straight onto a court.
-    const playing=present().filter(p=>!restSet.has(p.id));   // already in tier order
-    const seen=new Set(), units=[];
-    playing.forEach(p=>{
-      if(seen.has(p.id))return;
-      const mate=lockedMate(p.id);
-      if(mate&&P(mate)&&!restSet.has(mate)&&!seen.has(mate)){
-        units.push([p.id,mate]); seen.add(p.id); seen.add(mate);
-      }else{units.push([p.id]); seen.add(p.id)}
-    });
-    const pool=units.slice(), built=[];
-    while(pool.length&&built.length<courts){
-      const four=[];
-      while(four.length<4){
-        const i=pool.findIndex(u=>four.length+u.length<=4);
-        if(i<0)break;
-        four.push(...pool.splice(i,1)[0]);
-      }
-      if(four.length===4)built.push(four); else break;
-    }
-    if(built.length===courts){
-      const cs=built.map(four=>{
-        const [a,b,c,d]=four;
-        const opts=[[[a,b],[c,d]],[[a,c],[b,d]],[[a,d],[b,c]]]
-          .filter(([t1,t2])=>!four.some(x=>{                 // never split a locked pair
-            const m=lockedMate(x);
-            return m&&four.includes(m)&&!(t1.includes(x)&&t1.includes(m))&&!(t2.includes(x)&&t2.includes(m));
-          }));
-        // the four players are already fixed, so only the split can even the game up:
-        // lean much harder on balance here than the free-for-all mixer does
-        // The four players are fixed, so only the split can even the game up — and a
-        // tier of four offers just six possible pairs, so repeats are forced. The
-        // mixer's quadratic repeat penalty would explode here and swamp balance, so
-        // use a linear one: spread the repeats around rather than fight them.
-        const splitPen=cc=>{
-          const gap=Math.abs(sum(cc.a)-sum(cc.b));
-          let p=Wb*4*(gap+gap*gap/40);
-          [cc.a,cc.b].forEach(t=>{
-            p+=Wp*.25*(st[t[0]].partners[t[1]]||0);
-            const lp=st[t[0]].lastPartner[t[1]];
-            if(lp!=null)p+=Wp*.35*Math.max(0,3-(rd-lp));     // just not twice running
-          });
-          return p;
-        };
-        const use=(opts.length?opts:[[[a,b],[c,d]]])
-          .map(([t1,t2])=>({c:{a:t1,b:t2},p:splitPen({a:t1,b:t2})}))
-          .sort((x,y)=>x.p-y.p)[0].c;
-        return {a:use.a,b:use.b,locked:false,forced:false,winner:null,winScore:null,loseScore:null};
-      });
-      return {round:{n:roundsDone()+1,courts:cs,resting,confirmed:false},dropped:0};
-    }
-    // couldn't tile cleanly (locked pairs straddling a boundary) — fall through to the mixer
-  }
-
-  const singles=present().map(p=>p.id).filter(id=>!used.has(id)&&!restSet.has(id));
-  const singlesNeeded=openCourts*4-pairUnits.length*2;
-  if(singles.length!==singlesNeeded)return{error:'Could not fit the locked or forced pairings into the available courts.'};
-
-  // ---- randomised construction + hill climbing ----
-  const build=()=>{
-    const slots=[];                                             // team slots for the open courts
-    const pool=pairUnits.map(u=>u.ids);
-    const idx=[...Array(slotsFree).keys()];
-    for(let i=idx.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[idx[i],idx[j]]=[idx[j],idx[i]]}
-    const sg=[...singles];
-    for(let i=sg.length-1;i>0;i--){const j=(Math.random()*(i+1))|0;[sg[i],sg[j]]=[sg[j],sg[i]]}
-    const fixedSlots=new Set();
-    pool.forEach((ids,i)=>{slots[idx[i]]=[...ids];fixedSlots.add(idx[i])});
-    let k=0;
-    for(let i=0;i<slotsFree;i++)if(!slots[i])slots[i]=[sg[k++],sg[k++]];
-    return{slots,fixedSlots};
-  };
-  // a slot carries its own "fixed" flag, so whole-slot swaps can never break a forced pair
-  const toCourts=slots=>{
-    const out=fixed.map(c=>({a:[...c.a],b:[...c.b],locked:!!c.locked,forced:!!c.forced}));
-    for(let i=0;i<slots.length;i+=2)out.push({a:[...slots[i].ids],b:[...slots[i+1].ids],locked:false,forced:false});
-    return out;
-  };
-  let best=null,bestP=Infinity;
-  const restarts=openCourts?clamp(14-openCourts,6,14):1;
-  for(let r=0;r<restarts;r++){
-    const{slots,fixedSlots}=build();
-    let cur=slots.map((s,i)=>({ids:[...s],fix:fixedSlots.has(i)})), curP=totalPen(toCourts(cur));
-    const steps=250+openCourts*140;
-    for(let s=0;s<steps;s++){
-      const trial=cur.map(x=>({ids:[...x.ids],fix:x.fix}));
-      const mv=[];for(let i=0;i<trial.length;i++)if(!trial[i].fix)mv.push(i);
-      if(Math.random()<.72&&mv.length){                         // swap two individual (unlocked) players
-        const i=mv[(Math.random()*mv.length)|0], j=mv[(Math.random()*mv.length)|0];
-        const x=(Math.random()*2)|0, y=(Math.random()*2)|0;
-        if(i===j&&x===y)continue;
-        const t=trial[i].ids[x];trial[i].ids[x]=trial[j].ids[y];trial[j].ids[y]=t;
-      }else if(trial.length>1){                                 // move a whole team to another court
-        const i=(Math.random()*trial.length)|0, j=(Math.random()*trial.length)|0;
-        if(i===j)continue;
-        const t=trial[i];trial[i]=trial[j];trial[j]=t;
-      }else continue;
-      const p=totalPen(toCourts(trial));
-      if(p<=curP){cur=trial;curP=p}
-    }
-    if(curP<bestP){bestP=curP;best=cur}
-  }
-  const cs=toCourts(best||[]);
-  cs.forEach(c=>{c.winner=null;c.winScore=null;c.loseScore=null});
-  return{round:{n:roundsDone()+1,courts:cs,resting,confirmed:false},dropped:drop.length};
 }
 
 function courtTiers(c){            // which skill groups are on this court, in order
@@ -1014,18 +761,15 @@ function render(){
     : tab==='players' ? viewPlayers(st)
     : tab==='history' ? viewHistory(st)
     : viewSettings();
-  // after the body renders, so a round generated during render shows in the title
+  // after the body renders, so a court drawn during render shows in the title
   $('#hTitle').textContent = tab!=='game' ? TABS.find(t=>t[0]===tab)[1]
       : !S.started ? 'New Session'
       : S.ended ? 'Final Score'
-      : S.current ? 'Round '+S.current.n : 'Session';
-  /* Rolling has no rounds -- courts finish independently -- so dividing
-     matches by courts read as "0 rounds played" after two real games had been
-     played, which looks like nothing has happened. Count what actually
-     happened in each style. */
-  const done = isRolling()
-    ? `${(S.matches||[]).length} match${(S.matches||[]).length===1?'':'es'}`
-    : `${roundsDone()} round${roundsDone()===1?'':'s'} played`;
+      : 'Session';
+  /* Courts finish independently, so there are no rounds to count: dividing
+     matches by courts read as "0 rounds played" after two real games, which
+     looks like nothing has happened. Count the matches. */
+  const done = `${(S.matches||[]).length} match${(S.matches||[]).length===1?'':'es'}`;
   $('#hSub').textContent =
       `${present().length} player${present().length===1?'':'s'} · ${activeCourts()||'no'} court${activeCourts()===1?'':'s'} · ${done}`;
   $('#hRight').innerHTML = S.started&&tab!=='settings'
@@ -1054,7 +798,7 @@ function viewStart(){
   </div>
   ${away ? `<div class="note">${away} marked away \u2014 ${n} here, and only they are picked.</div>` : ''}
   ${n<4 ? `<div class="note">A doubles court needs 4 players \u2014 ${4-n} more and you can play.</div>`
-   : ac<c ? `<div class="note">${n} players fills <b>${ac} court${ac>1?'s':''}</b>${n-playing?` with ${n-playing} resting each round`:''}.
+   : ac<c ? `<div class="note">${n} players fills <b>${ac} court${ac>1?'s':''}</b>${n-playing?` with ${n-playing} waiting`:''}.
              Courts is a maximum \u2014 the app only uses what you can fill.</div>` : ''}
   <div class="card tight">
     <div class="row"><span class="mini">Scoring</span><span class="sp"></span>
@@ -1073,108 +817,25 @@ function viewStart(){
 function viewGame(st){
   if(!S.started)return viewStart();
   if(S.ended)return viewFinal(st);
-  if(isRolling()){
-    if(activeCourts()<1){
-      const n=S.players.length;
-      return `<div class="card"><div class="empty"><span class="ic">🏸</span><b>${n?'Waiting for players':'No players yet'}</b>
-        A doubles court needs 4. You have ${n} — ${Math.max(0,4-n)} more to start.</div></div>
-        <button class="btn pri full" onclick="go('players')">Add players</button>`;
-    }
-    if(!(S.courts||[]).some(Boolean)) fillCourts();
-    return viewRolling(st);
-  }
   if(activeCourts()<1){
     const n=S.players.length;
     return `<div class="card"><div class="empty"><span class="ic">🏸</span><b>${n?'Waiting for players':'No players yet'}</b>
-      A doubles court needs 4. You have ${n} — ${4-n} more to start a round.</div></div>
+      A doubles court needs 4. You have ${n} — ${Math.max(0,4-n)} more to start.</div></div>
       <button class="btn pri full" onclick="go('players')">Add players</button>`;
   }
-  if(!S.current){
-    const r=generateRound(false);
-    if(r.error)return `<div class="note err">${esc(r.error)}</div>
-      <button class="btn full" onclick="go('players')">Add players</button>`;
-    S.current=r.round;
-  }
-  const cur=S.current, str=strengths(st), draft=!cur.confirmed;
-  const allDone=cur.courts.every(c=>c.winner&&(winsOnly()||hasScore(c)));
-
-  const chip=(id,loc)=>{
-    const s=st[id]||{pts:0,games:0};
-    return `<button class="chip ${sel===id?'sel':''}" data-pid="${id}" ${draft&&!loc?'draggable="true"':''}
-      onclick="${draft?(loc?`toast('This court is locked','1')`:`tapPlayer('${id}')`):'null'}">
-      <i class="tdot" data-tier="${tierOf(P(id))}"></i>
-      <span>${esc(nameOf(id))}</span><span class="st">${winsOnly()
-        ? `${s.wins||0} ${(s.wins||0)===1?'win':'wins'} · ${s.games} ${s.games===1?'game':'games'}`
-        : `${s.pts} pts · ${s.games} ${s.games===1?'game':'games'}`}</span></button>`;
-  };
-  const teamBlock=(c,side,ci)=>{
-    const t=c[side], lk=isLockedPair(t[0],t[1]), loc=c.locked||lk;
-    if(draft){
-      const pc=(st[t[0]].partners[t[1]]||0), lp=st[t[0]].lastPartner[t[1]];
-      const hint=lk?'<span class="mini" style="color:var(--court)">🔒 Always partners</span>'
-                 :pc?`<span class="mini" style="color:#7A5A00">Partnered ${pc}× before${lp!=null?' (last R'+lp+')':''}</span>`
-                   :'<span class="mini">New partnership</span>';
-      return `<div class="team ${lk?'lockedpair':''}">
-        <div class="tnames">${t.map(id=>chip(id,loc)).join('')}</div>
-        <div class="row" style="margin-top:9px">${hint}</div></div>`;
-    }
-    const w=c.winner===side, l=c.winner&&c.winner!==side;
-    return `<button class="team ${w?'win':''} ${l?'lose':''}" onclick="pickWinner(${ci},'${side}')">
-        <div style="font-size:17px;font-weight:800">${esc(teamName(t))}</div>
-        <div class="mini" style="margin-top:4px">${w?'WINNER':l?'':'Tap if they win'}</div></button>`;
-  };
-
-  return `
-  ${cur.resting.length?`
-  <div class="card tight">
-    <div class="row"><span class="mini" style="color:var(--warn)">Resting this round</span>
-      ${draft?'<span class="sp"></span><span class="mini">tap to swap in</span>':''}</div>
-    <div class="row wrap" style="margin-top:8px">
-      ${cur.resting.map(id=>`<button class="pill ${sel===id?'sel':''}" data-pid="${id}" ${draft?'draggable="true"':''}
-        style="${sel===id?'border-color:var(--acc);background:rgba(61,220,132,.14)':''}"
-        onclick="${draft?`tapPlayer('${id}')`:'null'}"><i class="tdot" data-tier="${tierOf(P(id))}"></i>${esc(nameOf(id))}
-        <span style="color:var(--ink3);font-size:11.5px;font-weight:800">${(st[id]||{}).games||0} ${((st[id]||{}).games||0)===1?'game':'games'}</span></button>`).join('')}
-    </div>
-  </div>`:'<div class="card tight"><span class="mini">Everyone plays this round</span></div>'}
-
-  ${draft&&sel?`<div class="note">Tap another player to swap <b>${esc(nameOf(sel))}</b> with them. <button class="btn xs" style="margin-left:6px" onclick="sel=null;render()">Cancel</button></div>`:''}
-
-  ${cur.courts.map((c,i)=>{
-    const b=balanceOf(c,str), lbl=b>=85?'🟢 Very balanced':b>=70?'🟡 Fair':'🔴 Uneven';
-    const col=b>=85?'var(--acc)':b>=70?'var(--warn)':'var(--bad)';
-    return `<div class="court ${c.locked?'locked':''}">
-      <div class="court-h">
-        <span class="cn">Court ${i+1}</span>${S.settings.pairing==='level'?`<span class="ctier">${courtTiers(c)}</span>`:''}
-        ${c.forced?'<span class="tag b">Forced</span>':''}
-        <span class="bal" style="color:${col}">${draft?lbl.slice(0,2):lbl} ${b}%</span>
-      </div>
-      <div class="court-b">
-        ${teamBlock(c,'a',i)}
-        <div class="vs"><span>VS</span></div>
-        ${teamBlock(c,'b',i)}
-        ${b<70&&draft?'<div class="note" style="margin:10px 0 0">⚠️ This matchup may be uneven — you can still proceed.</div>':''}
-        ${!draft?(winsOnly()?'':scoreUI(c,i)):''}
-      </div>
-    </div>`}).join('')}
-
-  ${draft?`
-    ${forcedUI()}
-    <div class="grid2" style="margin-top:12px">
-      <button class="btn" onclick="regen()">↻ Regenerate</button>
-      <button class="btn pri" onclick="confirmRound()">Confirm Round</button>
-    </div>
-    <div class="muted" style="margin-top:10px;text-align:center">Tap two players to swap them. Nothing is recorded until you confirm.</div>
-    ${endBtn()}
-  `:`
-    <button class="btn pri full" onclick="finishRound()" ${allDone?'':'disabled'}>Finish Round ${allDone?'':'· enter all results'}</button>
-    <button class="btn gho full" style="margin-top:10px" onclick="reopenRound()">← Edit teams again</button>
-    ${endBtn()}
-  `}`;
+  /* Sweep every court inside the limit, not only the all-empty case.
+     Several paths leave one court empty with nothing to refill it -- coming
+     back from the final screen, raising the court count, changing a setting --
+     and v52's blanket refill on save, which used to paper over all of them,
+     went when the result panel arrived. fillCourts() skips a court waiting on
+     a Next-teams decision, so the pause is untouched; this only picks up
+     courts nothing else was going to fill. */
+  fillCourts();
+  return viewRolling(st);
 }
 
-
 /* ---- Rolling: the Game tab ------------------------------------------ */
-const courtAt = i => isRolling() ? (S.courts||[])[i] : (S.current ? S.current.courts[i] : null);
+const courtAt = i => (S.courts||[])[i];
 
 /* Swap a player on a court with someone in the queue, or two players
    across courts. Same two-tap gesture as Synchronised mode. */
@@ -1443,9 +1104,7 @@ function endBtn(){
   return `<button class="btn dan full" style="margin-top:18px" onclick="endGame()">🏁 End game &amp; see final score</button>`;
 }
 function endGame(){
-  const pending=S.current&&S.current.confirmed&&S.current.courts.some(c=>!c.winner||c.winScore==null);
-  ask(pending?'Round '+S.current.n+' has no result yet, so it will not count. Everything already finished is kept.'
-             :'Rounds already finished are kept. You can resume afterwards if you want to keep playing.',
+  ask('Matches already finished are kept. You can resume afterwards if you want to keep playing.',
       'End the game',()=>{S.ended=true;sel=null;tab='game';window.scrollTo(0,0);render();toast('Game over — final score below')});
 }
 function resumeGame(){S.ended=false;tab='game';render();toast('Back in play')}
@@ -1458,17 +1117,17 @@ function viewFinal(st){
   const win=list[0], medals=['🥇','🥈','🥉'];
   const gs=S.players.map(p=>st[p.id].games);
   let margins=[],pc={};
-  S.rounds.forEach(r=>r.courts.forEach(c=>{
+  (S.matches||[]).forEach((c,i)=>{
     if(!c.winner||!hasScore(c))return;
-    margins.push({m:c.winScore-lossOf(c),r:r.n,ws:c.winScore,ls:lossOf(c),
+    margins.push({m:c.winScore-lossOf(c),r:i+1,ws:c.winScore,ls:lossOf(c),
       w:c.winner==='a'?c.a:c.b});
     [c.a,c.b].forEach(t=>{const k=pk(t[0],t[1]);pc[k]=(pc[k]||0)+1});
-  }));
+  });
   margins.sort((a,b)=>a.m-b.m);
   const row=(k,v,sub)=>`<div class="stat"><span class="k">${k}</span><span class="v">${v}${sub?`<small>${sub}</small>`:''}</span></div>`;
   return `
   <div class="champ">
-    <div class="lbl">🏸 Final score · ${roundsDone()} rounds</div>
+    <div class="lbl">🏸 Final score · ${matchesDone()} match${matchesDone()===1?'':'es'}</div>
     <div class="nm">${esc(nameOf(win.id))}</div>
     <div class="pts">${win.pts} points · ${win.games} games · ${win.avg.toFixed(1)} per game</div>
   </div>
@@ -1486,9 +1145,9 @@ function viewFinal(st){
   <div class="sec-h">How it went</div>
   <div class="card">
     ${margins.length?row('Closest game',`${margins[0].ws}–${margins[0].ls}`,
-        `Round ${margins[0].r} · ${esc(teamName(margins[0].w))}`):''}
+        `Match ${margins[0].r} · ${esc(teamName(margins[0].w))}`):''}
     ${margins.length?row('Biggest win',`${margins[margins.length-1].ws}–${margins[margins.length-1].ls}`,
-        `Round ${margins[margins.length-1].r} · ${esc(teamName(margins[margins.length-1].w))}`):''}
+        `Match ${margins[margins.length-1].r} · ${esc(teamName(margins[margins.length-1].w))}`):''}
     ${row('Games played','',`${Math.min(...gs)}–${Math.max(...gs)} each · gap of ${Math.max(...gs)-Math.min(...gs)}`)}
     ${row('Different partnerships','',`${Object.keys(pc).length} pairs, ${Object.values(pc).filter(v=>v>1).length} repeated`)}
   </div>
@@ -1516,18 +1175,6 @@ function scoreUI(c,i){
   </div>`;
 }
 
-function forcedUI(){
-  return `
-  <div class="sec-h">Forced pairs</div>
-  <div class="card">
-    ${S.locks.length?S.locks.map((l,i)=>`<div class="row" style="margin-bottom:9px">
-      <span class="pill" style="flex:1;border-color:var(--court);color:var(--court-d)">\u{1F512} ${esc(nameOf(l[0]))} + ${esc(nameOf(l[1]))}</span>
-      <button class="ibtn dan" onclick="unlockPair(${i})">\u00d7</button></div>`).join(''):''}
-    <button class="btn sm full" onclick="pairDialog()">+ Force pair</button>
-    <div class="muted" style="margin-top:10px">A forced pair stays on the same team every round \u2014 and sits out together \u2014 until you remove it.</div>
-  </div>`;
-}
-
 /* ---------------- leaderboard ------------------------------------------- */
 function rankKey(s){
   if(winsOnly())return[s.wins,s.wr,s.games];
@@ -1547,10 +1194,10 @@ function ranked(st){
 }
 function viewBoard(st){
   const list=ranked(st);
-  if(!roundsDone())return `<div class="card"><div class="empty"><span class="ic">\u{1F3C6}</span><b>No results yet</b>
-    Finish round 1 and the table fills in</div></div>`;
+  if(!matchesDone())return `<div class="card"><div class="empty"><span class="ic">\u{1F3C6}</span><b>No results yet</b>
+    Save the first match result and the table fills in</div></div>`;
   const avgG=S.players.reduce((a,p)=>a+st[p.id].games,0)/S.players.length;
-  const resting=new Set(S.current?S.current.resting:[]);
+  const resting=new Set();
   const label=winsOnly()?'Wins':{points:'Total Points',avg:'Avg / Game',wins:'Wins',winpct:'Win %'}[S.settings.rankBy];
   const P_=!winsOnly();                      // show the points columns?
   const pct=s=>Math.round(s.wr*100)+'%';
@@ -1813,66 +1460,28 @@ function setTier(id,t){const p=P(id);if(!p)return;p.tier=t;sortByTier();closeMod
 
 /* ---------------- history ------------------------------------------------ */
 function viewHistory(st){
-  if(isRolling()){
-    const ms=(S.matches||[]);
-    if(!ms.length)return `<div class="card"><div class="empty"><span class="ic">📋</span><b>No matches finished yet</b>Each match appears here as soon as you save its result</div></div>`;
-    const t=n=>new Date(n).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
-    return ms.slice().reverse().map((m,ri)=>{
-      const idx=ms.length-1-ri;          // the row is reversed; edit the real match
-      const ws=m.winScore, ls=m.loseScore;
-      const w=m.winner==='a'?m.a:m.b, l=m.winner==='a'?m.b:m.a;
-      return `<div class="hist">
-        <div class="row" style="margin-bottom:6px">
-          <b style="font-size:15px">Court ${m.court}</b>
-          <span class="mini" style="margin-left:8px">${t(m.at)}</span><span class="sp"></span>
-          <button class="btn xs" onclick="editMatchDialog(${idx})">Edit</button></div>
-        <div class="hrow"><span class="w">${esc(teamName(w))}</span>
-          <span class="sc" style="color:var(--acc)">${ws==null?'won':ws}</span></div>
-        <div class="hrow"><span style="color:var(--dim)">${esc(teamName(l))}</span>
-          <span class="sc" style="color:var(--dim2)">${ls==null?'':ls}</span></div>
-      </div>`;
-    }).join('')+
-    `<button class="btn dan full" onclick="undoLastMatch()">Undo last match</button>`;
-  }
-  if(!S.rounds.length)return `<div class="card"><div class="empty"><span class="ic">📋</span><b>No rounds finished yet</b>Completed rounds appear here and can be edited</div></div>`;
-  return S.rounds.slice().reverse().map(r=>`
-    <div class="hist">
-      <div class="row" style="margin-bottom:6px"><b style="font-size:15px">Round ${r.n}</b><span class="sp"></span>
-        <button class="btn xs" onclick="editRoundDialog(${r.n})">Edit</button></div>
-      ${r.courts.map((c,ci)=>{
-        const ws=c.winScore,ls=lossOf(c);
-        const w=c.winner==='a'?c.a:c.b,l=c.winner==='a'?c.b:c.a;
-        return `<div class="hrow"><span class="mini" style="width:16px">${ci+1}</span>
-          <span class="w">${esc(teamName(w))}</span><span class="sc" style="color:var(--acc)">${ws==null?'won':ws}</span></div>
-        <div class="hrow" style="border-bottom:1px solid rgba(42,52,64,.5)"><span class="mini" style="width:16px"></span>
-          <span style="color:var(--dim)">${esc(teamName(l))}</span><span class="sc" style="color:var(--dim2)">${ls==null?'':ls}</span></div>`;
-      }).join('')}
-      ${r.resting.length?`<div class="muted" style="margin-top:8px">Resting: ${r.resting.map(id=>esc(nameOf(id))).join(', ')}</div>`:''}
-    </div>`).join('')+
-    `<button class="btn dan full" onclick="undoLast()">Undo last round</button>`;
+  const ms=(S.matches||[]);
+  if(!ms.length)return `<div class="card"><div class="empty"><span class="ic">📋</span><b>No matches finished yet</b>Each match appears here as soon as you save its result</div></div>`;
+  /* A match carried over from a Synchronised session has no clock of its own,
+     so show nothing rather than 1 January 1970. */
+  const t=n=>n==null?'':new Date(n).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  return ms.slice().reverse().map((m,ri)=>{
+    const idx=ms.length-1-ri;          // the row is reversed; edit the real match
+    const ws=m.winScore, ls=m.loseScore;
+    const w=m.winner==='a'?m.a:m.b, l=m.winner==='a'?m.b:m.a;
+    return `<div class="hist">
+      <div class="row" style="margin-bottom:6px">
+        <b style="font-size:15px">Court ${m.court}</b>
+        <span class="mini" style="margin-left:8px">${t(m.at)}</span><span class="sp"></span>
+        <button class="btn xs" onclick="editMatchDialog(${idx})">Edit</button></div>
+      <div class="hrow"><span class="w">${esc(teamName(w))}</span>
+        <span class="sc" style="color:var(--acc)">${ws==null?'won':ws}</span></div>
+      <div class="hrow"><span style="color:var(--dim)">${esc(teamName(l))}</span>
+        <span class="sc" style="color:var(--dim2)">${ls==null?'':ls}</span></div>
+    </div>`;
+  }).join('')+
+  `<button class="btn dan full" onclick="undoLastMatch()">Undo last match</button>`;
 }
-function editRoundDialog(n){
-  const r=S.rounds.find(x=>x.n===n);if(!r)return;
-  const [min,max]=scoreRange();
-  const opts=[];for(let v=min;v<=max;v++)opts.push(v);
-  modal(`<h3 style="margin-bottom:4px">Edit Round ${n}</h3>
-    <div class="muted" style="margin-bottom:14px">Everything (points, leaderboard, averages) recalculates automatically.</div>
-    ${r.courts.map((c,i)=>`
-      <div class="card" style="margin-bottom:12px">
-        <div class="mini" style="margin-bottom:8px">Court ${i+1}</div>
-        <div class="seg" style="margin-bottom:10px">
-          <button class="${c.winner==='a'?'on':''}" onclick="editSet(${n},${i},'w','a')">${esc(teamName(c.a))}</button>
-          <button class="${c.winner==='b'?'on':''}" onclick="editSet(${n},${i},'w','b')">${esc(teamName(c.b))}</button>
-        </div>
-        ${winsOnly()?'':`<div class="mini" style="margin-bottom:6px">${isFirstTo()?"Loser's score":'Winning score'}</div>
-        <div class="scorepick${opts.length>12?' wide':''}">${opts.map(v=>`<button class="${pickedValue(c)===v?'on':''}" onclick="editSet(${n},${i},'s',${v})">${v}</button>`).join('')}</div>`}
-      </div>`).join('')}
-    <button class="btn pri full" onclick="closeModal();render()">Done</button>`);
-}
-/* The Rolling twin of editRoundDialog. A match carries the same winner /
-   winScore / loseScore shape as a court, so applyScore, lossOf and
-   pickedValue all work on it unchanged, and stats() recomputes from
-   S.matches the moment it changes -- nothing else has to be touched. */
 function editMatchDialog(idx){
   const m=(S.matches||[])[idx]; if(!m)return;
   const t=new Date(m.at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
@@ -1896,17 +1505,6 @@ function editMatchSet(idx,what,val){
   if(what==='w')m.winner=val; else applyScore(m,val);
   save();editMatchDialog(idx);
 }
-function editSet(n,i,what,val){
-  const r=S.rounds.find(x=>x.n===n);if(!r)return;
-  if(what==='w')r.courts[i].winner=val;else applyScore(r.courts[i],val);
-  save();editRoundDialog(n);
-}
-function undoLast(){
-  if(!S.rounds.length)return;
-  ask('The points, games played and history from that round will be reversed.','Undo round '+S.rounds[S.rounds.length-1].n,
-    ()=>{S.rounds.pop();S.current=null;sel=null;render();toast('Last round removed')});
-}
-
 /* ---------------- settings ----------------------------------------------- */
 function viewSettings(){
   const s=S.settings;
@@ -1916,22 +1514,10 @@ function viewSettings(){
   return `
   <div class="sec-h">Session</div>
   <div class="card">
-    <div class="sl"><span class="lab">Courts available<small>A maximum — rounds only use what your players can fill (4 each)</small></span>
+    <div class="sl"><span class="lab">Courts available<small>A maximum — only as many as your players can fill, four each</small></span>
       <input type="number" min="1" max="12" value="${s.courts}" onchange="setSetting('courts',clamp(+this.value||1,1,12))"></div>
     <button class="btn dan full" style="margin-top:14px" onclick="newSession()">Start a new session</button>
     <button class="btn dan full" style="margin-top:10px" onclick="hardReset()">Reset everything</button>
-  </div>
-  <div class="sec-h">Session style</div>
-  <div class="card">
-    <div class="seg" style="margin-bottom:4px">
-      <button class="${s.style==='rolling'?'on':''}" onclick="setStyle('rolling')">Rolling</button>
-      <button class="${s.style!=='rolling'?'on':''}" onclick="setStyle('sync')">Synchronised</button>
-    </div>
-    <div class="muted" style="padding:10px 2px 2px">${s.style==='rolling'
-      ? `Each court runs on its own. The moment one finishes you enter that result and it refills
-         straight away from the queue \u2014 the other courts carry on untouched.`
-      : `Every court starts and finishes together. You enter all the results, then everyone rotates
-         at once.`}</div>
   </div>
   <div class="sec-h">Scoring</div>
   <div class="card">
@@ -1982,7 +1568,6 @@ function viewSettings(){
     ${sl('partnerStrict','Partner-repeat strictness','Higher = harder to get the same partner twice',1,5)}
     ${sl('oppStrict','Opponent-repeat strictness','Higher = more opponent variety',1,5)}
     ${sl('balance','Match balance importance','Higher = closer, more even games',1,5)}
-    ${sl('restFair','Rest fairness importance','Higher = playing time evened out faster',1,5)}
     ${sl('noise','Social randomness','Higher = more shuffling, less optimal',1,5)}
 
   </div>
@@ -2013,25 +1598,18 @@ function addPlayer(){
                   away:false,qg:minQueueGames(),lastPlayed:(S.matches||[]).length});
   sortByTier();
   el.value='';
-  if(S.current&&!S.current.confirmed)S.current=null;
   // The new arrival may be the fourth who makes another court possible --
   // open it now rather than at the end of somebody else's match.
-  if(S.started&&isRolling())fillCourts();
+  if(S.started)fillCourts();
   render();el=$('#newName');if(el)el.focus();
 }
 function renamePlayer(id){
   const p=P(id);if(!p)return;
   askText('Rename player',p.name,n=>{if(n&&n.trim()){p.name=n.trim();render()}});
 }
-/* Everything this player appears in, in BOTH stores. stats() only reads the
-   store belonging to the style currently selected, so asking it how many games
-   someone has played answered 0 for a player with a full Rolling history while
-   Synchronised happened to be on -- and they were then removed with no warning
-   and no cleanup, orphaning those matches. */
 function playedCount(id){
   let n=0;
   (S.matches||[]).forEach(m=>{ if([...m.a,...m.b].includes(id))n++ });
-  (S.rounds ||[]).forEach(r=>r.courts.forEach(c=>{ if([...c.a,...c.b].includes(id))n++ }));
   return n;
 }
 function delPlayer(id){
@@ -2045,21 +1623,16 @@ function delPlayer(id){
 }
 function dropPlayer(id){
   S.players=S.players.filter(p=>p.id!==id);
-  // Both stores, always: a result naming someone who is no longer on the
-  // roster still fed the other three players' totals, so the leaderboard
-  // stopped adding up to four games per match.
-  S.rounds =(S.rounds ||[]).filter(r=>!r.courts.some(c=>[...c.a,...c.b].includes(id)));
+  // A result naming someone who is no longer on the roster still fed the
+  // other three players' totals, so the leaderboard stopped adding up to
+  // four games per match.
   S.matches=(S.matches||[]).filter(m=>![...m.a,...m.b].includes(id));
-  S.locks=S.locks.filter(l=>!l.includes(id));
-  S.forced.pairs=S.forced.pairs.filter(pr=>!pr.includes(id));
-  if(S.forced.match&&[...S.forced.match.a,...S.forced.match.b].includes(id))S.forced.match=null;
-  if(S.current&&(S.current.resting.includes(id)||S.current.courts.some(c=>[...c.a,...c.b].includes(id))))S.current=null;
   // A Rolling court holding the removed player kept showing them, and a court
   // too many stayed up once the roster could no longer fill it. Tear down any
   // court that named them and let fillCourts() rebuild to the new size.
   if(S.started){
     S.courts=(S.courts||[]).map(c=>(c&&[...c.a,...c.b].includes(id))?null:c);
-    if(isRolling())fillCourts();
+    fillCourts();
   }
   render();
 }
@@ -2069,100 +1642,45 @@ function dropPlayer(id){
    courts being refilled -- fillCourts() never takes down a match in play. */
 function setCourts(d){
   S.settings.courts=clamp(S.settings.courts+d,1,12);
-  if(S.started&&isRolling())fillCourts();
+  if(S.started)fillCourts();
   render();
-}
-function clearLiveScores(){      // a half-entered round is meaningless under new rules
-  if(!S.current)return false;
-  let had=false;
-  S.current.courts.forEach(c=>{
-    if(c.winner||c.winScore!=null)had=true;
-    c.winner=null;c.winScore=null;c.loseScore=null;
-  });
-  return had;
 }
 function setPairing(v){
   if(S.settings.pairing===v)return;
   S.settings.pairing=v;
-  if(S.current&&!S.current.confirmed)S.current=null;
   render();
   toast(v==='level'?'Same level \u2014 groups play among themselves':'Social mix \u2014 everyone mixes');
 }
 function setScoring(v){
   if(S.settings.scoring===v)return;
   // Half-entered results would be stranded in whichever shape they were in.
-  const live = isRolling()
-    ? (S.courts||[]).some(c=>c&&(c.winner||hasScore(c)||c.entering))
-    : !!(S.current&&S.current.confirmed&&S.current.courts.some(c=>c.winner||hasScore(c)));
+  const live = (S.courts||[]).some(c=>c&&(c.winner||hasScore(c)||c.entering));
   if(S.started&&live){toast('Save or clear the result on court first',1);return}
   S.settings.scoring=v;
   render();
   toast(v==='wins'?'Wins only \u2014 just tap who won':'Scores on \u2014 enter a result each match');
 }
 
-function setStyle(v){
-  if(S.settings.style===v)return;
-  // Switching with matches in flight would void games people are playing.
-  const live = isRolling()
-    ? (S.courts||[]).some(c=>c&&(c.winner||hasScore(c)||c.entering))
-    : !!(S.current&&S.current.confirmed);
-  if(S.started&&live){toast('Finish the results on court first',1);return}
-
-  /* The two styles keep their results in different places -- Rolling in
-     S.matches, Synchronised in S.rounds -- and the leaderboard reads only the
-     one in use. Switching with results already recorded therefore empties the
-     board and the history with no warning at all. Nothing is deleted and
-     switching back brings it all straight back, but the host cannot know that
-     from looking at it, so say so first. */
-  const done = isRolling() ? (S.matches||[]).length : (S.rounds||[]).length;
-  if(S.started && done){
-    const unit = done===1 ? (isRolling()?'match':'round')
-                          : (isRolling()?'matches':'rounds');
-    ask(`The ${done} ${unit} already played ${done===1?'stays':'stay'} saved, but ${done===1?'it is':'they are'} not counted while the other style is on. Switch back and ${done===1?'it returns':'they all return'}.`,
-        'Switch style', () => applyStyle(v));
-    return;
-  }
-  applyStyle(v);
-}
-function applyStyle(v){
-  S.settings.style=v;
-  savedPanel={};                     // the other style has no courts to cover
-  if(v==='rolling'){ S.current=null; S.courts=[]; if(S.started)fillCourts(); }
-  else { S.courts=[]; }
-  sel=null;render();
-  toast(v==='rolling'?'Rolling: courts refill on their own':'Synchronised: courts rotate together');
-}
 function setMode(m){
   if(S.settings.mode===m)return;
   S.settings.mode=m;
-  const wiped=clearLiveScores();
-  if(S.current&&!S.current.confirmed)S.current=null;
   render();
-  if(wiped){toast('Re-enter this round\u2019s scores \u2014 the rules changed',1);return}
   toast(m==='firstto'?`First to ${S.settings.total} — enter the loser's score`
                      :`Combined ${S.settings.total} — enter the winner's score`);
 }
 function setSetting(k,v){
   const old=S.settings[k];
   S.settings[k]=v;
-  if(k==='courts'&&S.current&&!S.current.confirmed)S.current=null;
-  if(k==='total'&&old!==v){
-    const wiped=clearLiveScores();
-    if(wiped){render();toast('Re-enter this round\u2019s scores \u2014 the target changed',1);return}
-  }
+  if(k==='courts'&&S.started)fillCourts();
   render();
 }
-/* Wipe every trace of a session's play, leaving the roster and settings alone.
-   Rolling keeps its results in S.matches/S.courts and Synchronised in
-   S.rounds/S.current -- clearing only one of the two left the leaderboard and
-   history of the old session running straight into the new one. The queue
-   counters live on the players themselves, so they reset here too. */
+/* Wipe every trace of a session's play, leaving the roster and settings
+   alone. The queue counters live on the players themselves, so they reset
+   here too. */
 function clearResults(){
-  S.rounds=[]; S.current=null;                 // synchronised
-  S.courts=[]; S.matches=[]; S.recentQuads={}; // rolling
-  S.forced={pairs:[],match:null}; S.locks=[];
+  S.courts=[]; S.matches=[]; S.recentQuads={};
   S.players.forEach(p=>{ p.qg=0; p.lastPlayed=0; });
-  editRound=null; sel=null; savedPanel={};
+  sel=null; savedPanel={};
 }
 function startSession(){
   if(!S.players.length)return;
@@ -2177,61 +1695,10 @@ function newSession(){
     toast('New session — the scoreboard is empty')});
 }
 function hardReset(){
-  ask('Players, rounds and settings will all be erased from this device.','Reset everything',()=>{
+  ask('Players, results and settings will all be erased from this device.','Reset everything',()=>{
     localStorage.removeItem(LS);S=defState();tab='game';sel=null;render()});
 }
 
-/* ---- editing the suggested round ---- */
-function locate(id){
-  const c=S.current;if(!c)return null;
-  const ri=c.resting.indexOf(id);if(ri>=0)return{type:'rest',i:ri};
-  for(let i=0;i<c.courts.length;i++)for(const side of['a','b']){
-    const k=c.courts[i][side].indexOf(id);
-    if(k>=0)return{type:'court',i,side,k};
-  }
-  return null;
-}
-function frozen(loc){
-  if(!loc)return false;
-  if(loc.type==='rest')return false;
-  const c=S.current.courts[loc.i];
-  if(c.locked)return true;
-  const t=c[loc.side];
-  return isLockedPair(t[0],t[1]);        // locked partners stay put until unlocked
-}
-function tapPlayer(id){
-  if(!S.current||S.current.confirmed)return;
-  if(sel===id){sel=null;render();return}
-  if(!sel){sel=id;render();return}
-  swapPlayers(sel,id);sel=null;render();
-}
-function swapPlayers(x,y){
-  const A=locate(x),B=locate(y);
-  if(!A||!B)return;
-  if(frozen(A)||frozen(B)){toast('That player is in a locked team',1);return}
-  const put=(loc,id)=>{ if(loc.type==='rest')S.current.resting[loc.i]=id; else S.current.courts[loc.i][loc.side][loc.k]=id };
-  put(A,y);put(B,x);
-}
-function unlockPair(i){const l=S.locks[i];if(!l)return;S.locks.splice(i,1);render();toast('Pair unlocked')}
-function regen(){
-  sel=null;
-  const r=generateRound(true);
-  if(r.error){toast(r.error,1);return}
-  S.current=r.round;
-  if(r.dropped)toast('Some forced pairings did not fit and were skipped',1);
-  render();
-}
-function confirmRound(){
-  if(!S.current)return;
-  S.current.confirmed=true;sel=null;window.scrollTo(0,0);render();
-  toast('Round confirmed — enter the results');
-}
-function reopenRound(){
-  if(!S.current)return;
-  S.current.confirmed=false;
-  S.current.courts.forEach(c=>{c.winner=null;c.winScore=null;c.loseScore=null});
-  render();
-}
 function pickWinner(i,side){
   const c=courtAt(i); if(!c)return;
   c.winner=c.winner===side?null:side;
@@ -2247,18 +1714,6 @@ function setScore(i,v){
   const c=courtAt(i); if(!c)return;
   applyScore(c,v);render();
 }
-function finishRound(){
-  const cur=S.current;if(!cur)return;
-  if(!cur.courts.every(c=>c.winner&&(winsOnly()||hasScore(c)))){
-    toast(winsOnly()?'Pick a winner on every court':'Enter a winner and score for every court',1);return}
-  S.rounds.push({n:cur.n,resting:[...cur.resting],
-    courts:cur.courts.map(c=>({a:[...c.a],b:[...c.b],winner:c.winner,winScore:c.winScore,loseScore:lossOf(c)}))});
-  S.forced={pairs:[],match:null};
-  S.current=null;sel=null;window.scrollTo(0,0);
-  render();toast(`Round ${S.rounds.length} saved`);
-}
-
-
 /* ═══════════════════════════════════════════════════════════════════════
    ROLLING MODE
    Courts run independently. A court that finishes refills immediately from
@@ -2361,7 +1816,13 @@ function pairFour(ids, st, str){
 
    Without this the tie-break was chronological, so the four who finished
    together were reselected together, and 8 players on 2 courts never mixed. */
-function chooseFour(order, st, str){
+/* `justFinished` are the four who walked off the court being drawn. They are
+   not banned here -- fillCourt already removes them when the pool is deep
+   enough -- but they must never be chosen AHEAD of somebody with fewer games.
+   That is the host's rule: "always cycles through in order of least games
+   played". */
+function chooseFour(order, st, str, justFinished){
+  const jfSet = new Set(justFinished || []);
   if(order.length < 4) return null;
   /* Everything below assumes `order` is in games-played order: the must/flex
      split takes qg(order[3]) as the cut and keeps only players at or under it,
@@ -2422,8 +1883,23 @@ function chooseFour(order, st, str){
     // wide tier gap is more expensive still.
     const front = order[0];
     let best = null;
+    let legal = 0;
     for(let i = 0; i + 4 <= byRank.length; i++){
       const four = byRank.slice(i, i + 4);
+      /* Nobody plays ahead of somebody with fewer games. The general branch
+         below enforces this as a hard split; this branch only PRICED it, at
+         qsum*1000 per stolen game, and gap*gap*800 plus the front-of-queue
+         charge routinely outbid that. Measured at 16 players on 3 courts:
+         three players who had just walked off went straight back on while
+         three others sat on zero games. It is the host's complaint exactly,
+         and it needs a rule, not a weight. */
+      {
+        const inFour = new Set(four);
+        let minOut = Infinity;
+        order.forEach(id => { if(!inFour.has(id) && qg(id) < minOut) minOut = qg(id); });
+        if(four.some(id => qg(id) > minOut)) continue;
+      }
+      legal++;
       const qsum = four.reduce((t,id)=>t+qg(id), 0);
       const r    = pairFour(four, st, str);
       const wait = four.reduce((t,id)=>{
@@ -2463,15 +1939,23 @@ function chooseFour(order, st, str){
                  + r.cost - 25 * wait;
       if(!best || cost < best.cost) best = {a:r.a, b:r.b, cost};
     }
+    /* Every window can be rejected -- when the players owed a game are
+       scattered across the skill order, no four CONTIGUOUS players are all
+       owed one. Fall through to the general branch, which is fairness-first
+       by construction and still groups by skill through spreadCost(). A
+       court is never left unfilled for want of a tidy window. */
     if(best) return best;
   }
 
   const cut  = qg(order[3]);
   const must = order.filter(id => qg(id) <  cut);
-  // In Same level the host has asked for skill grouping, so allow one extra
-  // game of slack when forming the pool -- without it a court of Advanced
-  // can never assemble and the mode cannot do its job.
-  let   flex = order.filter(id => qg(id) === cut || (level && qg(id) === cut + 1));
+  /* In Same level the host has asked for skill grouping, so allow one extra
+     game of slack when forming the pool -- without it a court of Advanced can
+     never assemble and the mode cannot do its job. But the slack is NOT for
+     the four who have just this second walked off: handing it to them is the
+     second way a just-played player got picked over someone still waiting. */
+  let   flex = order.filter(id => qg(id) === cut
+                              || (level && qg(id) === cut + 1 && !jfSet.has(id)));
   const need = 4 - must.length;
   if(need <= 0)   return pairFour(order.slice(0, 4), st, str);
   if(flex.length <= need) return pairFour(must.concat(flex).slice(0, 4), st, str);
@@ -2552,7 +2036,7 @@ function fillCourt(i, justFinished){
   if(order.length < 4){ S.courts[i] = null; return false; }
 
   const st = stats(), str = strengths(st);
-  const got = chooseFour(order, st, str);
+  const got = chooseFour(order, st, str, justFinished);
   if(!got){ S.courts[i] = null; return false; }
 
   S.courts[i] = { a: got.a, b: got.b, winner:null, winScore:null, loseScore:null };
@@ -2703,6 +2187,17 @@ function jointOrder(need, justFinished){
 function drawTwo(i, j, order, st, str){
   const pool = order.slice(0, 10);          // 210 x 15 scorings, bounded
   if(pool.length < 8) return false;
+  /* Same rule as chooseFour: of these ten, the eight who play must be the
+     eight with fewest games. Without this the scorer was free to leave a
+     player on fewer games sitting because the arithmetic liked someone else,
+     which is the queue-jump the host reported, reached by the other path. */
+  const qg = id => (P(id) ? (P(id).qg || 0) : 0);
+  const fair = eight => {
+    const inEight = new Set(eight);
+    let minOut = Infinity;
+    pool.forEach(id => { if(!inEight.has(id) && qg(id) < minOut) minOut = qg(id); });
+    return !eight.some(id => qg(id) > minOut);
+  };
   const fours = [];
   for(let a=0;a<pool.length;a++)for(let b=a+1;b<pool.length;b++)
     for(let c=b+1;c<pool.length;c++)for(let d=c+1;d<pool.length;d++)
@@ -2719,6 +2214,7 @@ function drawTwo(i, j, order, st, str){
         if(sb && (!bb || sb.cost < bb.cost)) bb = sb;
       }
     if(!bb) return;
+    if(!fair([...sa.a, ...sa.b, ...bb.a, ...bb.b])) return;
     const tot = sa.cost + bb.cost;
     if(!best || tot < best.tot) best = { tot, A:sa, B:bb };
   });
@@ -2785,17 +2281,6 @@ function setAway(id, away){
   if(away && S.started){
     const ci = (S.courts || []).findIndex(c => c && [...c.a, ...c.b].includes(id));
     if(ci >= 0){ awayOnCourtDialog(id, ci); return; }
-    // Synchronised keeps the round in S.current, not S.courts.
-    if(S.current && !isRolling()){
-      const inRound = (S.current.courts || [])
-        .some(c => c && [...c.a, ...c.b].includes(id));
-      if(inRound){ awayOnCourtDialog(id, -1); return; }
-      // Resting is not playing, so there is nothing to interrupt and nothing
-      // to ask: just take them off this round's resting list. Leaving them on
-      // it showed someone waiting for a turn after they had gone home.
-      const ri = (S.current.resting || []).indexOf(id);
-      if(ri >= 0) S.current.resting.splice(ri, 1);
-    }
   }
 
   applyAway(id, away);
@@ -2810,16 +2295,15 @@ function applyAway(id, away){
     p.qg = others.length ? Math.min(...others.map(x => x.qg || 0)) : 0;
     p.lastPlayed = S.matches ? S.matches.length : 0;
   }
-  if(isRolling() && S.started) fillCourts();
+  if(S.started) fillCourts();
   render();
   toast(away ? p.name + ' is away' : p.name + ' is back');
 }
 
-/* Away while on court. `ci` is the rolling court index, or -1 for a
-   synchronised round. */
+/* Away while on court. `ci` is the court index. */
 function awayOnCourtDialog(id, ci){
   const p = P(id); if(!p) return;
-  const where = ci >= 0 ? 'court ' + (ci + 1) : 'this round';
+  const where = 'court ' + (ci + 1);
   modal(`<h3 style="margin-bottom:6px">${esc(p.name)} is playing</h3>
     <div class="muted" style="margin-bottom:18px">They are on ${where} right now.
       Either way they will not be picked again until you bring them back.</div>
@@ -2841,15 +2325,10 @@ function awayRedraw(id, ci){
   closeModal();
   const p = P(id);
   p.away = true;
-  if(ci >= 0){
-    S.courts[ci] = null;
-    fillCourts();
-    render();
-    toast(p.name + ' is away \u2014 court ' + (ci + 1) + ' redrawn');
-  } else {
-    regen();
-    toast(p.name + ' is away \u2014 round redrawn');
-  }
+  S.courts[ci] = null;
+  fillCourts();
+  render();
+  toast(p.name + ' is away \u2014 court ' + (ci + 1) + ' redrawn');
 }
 
 function minQueueGames(){
@@ -2857,26 +2336,6 @@ function minQueueGames(){
   return o.length ? Math.min(...o.map(p=>p.qg||0)) : 0;
 }
 
-/* ---- forced pairings ---- */
-function removePair(i){S.forced.pairs.splice(i,1);regen()}
-function pairDialog(){
-  const used=new Set();S.locks.forEach(l=>l.forEach(i=>used.add(i)));
-  const av=S.players.filter(p=>!used.has(p.id));
-  if(av.length<2){toast('Not enough free players',1);return}
-  const o=av.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('');
-  modal(`<h3 style="margin-bottom:14px">Force a partnership</h3>
-    <div class="mini" style="margin-bottom:6px">Player 1</div><select id="fp1">${o}</select>
-    <div class="mini" style="margin:12px 0 6px">Player 2</div><select id="fp2">${o}</select>
-    <button class="btn pri full" style="margin-top:16px" onclick="addPair()">Force pair</button>
-    <button class="btn gho full" style="margin-top:10px" onclick="closeModal()">Cancel</button>`);
-  const s2=$('#fp2');if(s2&&s2.options.length>1)s2.selectedIndex=1;
-}
-function addPair(){
-  const a=$('#fp1').value,b=$('#fp2').value;
-  if(a===b){toast('Pick two different players',1);return}
-  setLock(a,b,true);closeModal();regen();
-  toast(`${nameOf(a)} + ${nameOf(b)} are locked together`);
-}
 /* ---- drag & drop + input wiring ---- */
 function wire(){
   const nn=$('#newName');
@@ -2889,7 +2348,7 @@ function wire(){
     el.ondragover=e=>{e.preventDefault();el.classList.add('over')};
     el.ondragleave=()=>el.classList.remove('over');
     el.ondrop=e=>{e.preventDefault();el.classList.remove('over');
-      if(dragId&&typeof dragId==='string'&&dragId!==el.dataset.pid){swapPlayers(dragId,el.dataset.pid);sel=null;render()}
+      if(dragId&&typeof dragId==='string'&&dragId!==el.dataset.pid){sel=dragId;tapRolling(el.dataset.pid)}
       dragId=null};
   });
 }
