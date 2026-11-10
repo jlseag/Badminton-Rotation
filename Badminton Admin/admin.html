@@ -1,0 +1,1017 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Badminton Admin</title>
+<style>
+:root{
+  --bg:#f6f8f6; --panel:#ffffff; --line:#e2e8e2; --fg:#15201a; --dim:#64736a;
+  --accent:#0E8A4F; --accent-soft:#e7f4ec;
+  --warn:#b4540a; --warn-soft:#fdf0e3; --danger:#b3261e; --danger-soft:#fdecea;
+  --violet:#5b4bb7; --violet-soft:#eeebfa;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+  --bg:#11160f; --panel:#19211a; --line:#2b362c; --fg:#e6ede7; --dim:#93a295;
+  --accent:#49c184; --accent-soft:#17301f;
+  --warn:#e2a35e; --warn-soft:#322314; --danger:#f0938c; --danger-soft:#331a18;
+  --violet:#a79cf0; --violet-soft:#211d33;
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#11160f; --panel:#19211a; --line:#2b362c; --fg:#e6ede7; --dim:#93a295;
+  --accent:#49c184; --accent-soft:#17301f;
+  --warn:#e2a35e; --warn-soft:#322314; --danger:#f0938c; --danger-soft:#331a18;
+  --violet:#a79cf0; --violet-soft:#211d33;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;}
+.wrap{max-width:1240px;margin:0 auto;padding-block:28px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));}
+h1{font-size:20px;margin:0;letter-spacing:-.01em}
+.sub{color:var(--dim);font-size:13px;margin-top:2px}
+button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--line);
+  background:var(--panel);color:var(--fg);padding:7px 13px}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+button.primary:hover{filter:brightness(1.08)}
+button.ghost{border:none;background:none;color:var(--dim);padding:4px 7px}
+button.ghost:hover{color:var(--fg)}
+input,select{font:inherit;padding:8px 11px;border-radius:8px;border:1px solid var(--line);
+  background:var(--panel);color:var(--fg);width:100%}
+input:focus,select:focus{outline:2px solid var(--accent);outline-offset:-1px;border-color:transparent}
+.pwwrap{position:relative}
+.pwwrap input{padding-right:66px}
+.eye{position:absolute;right:5px;top:50%;transform:translateY(-50%);
+  background:none;border:none;color:var(--dim);font-size:11.5px;font-weight:700;
+  padding:7px 10px;border-radius:6px;cursor:pointer;letter-spacing:.04em;width:auto}
+.eye:hover{color:var(--accent);background:var(--accent-soft)}
+label{display:block;font-size:12px;font-weight:600;color:var(--dim);margin-bottom:5px;
+  letter-spacing:.03em;text-transform:uppercase}
+
+/* ── sign in ───────────────────────────────────────────── */
+#login{min-height:88vh;display:grid;place-items:center}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:26px;
+  width:100%;max-width:380px}
+.shuttle{width:34px;height:34px;border-radius:9px;background:var(--accent);color:#fff;
+  display:grid;place-items:center;font-size:18px;margin-bottom:14px}
+.field{margin-bottom:14px}
+.err{background:var(--danger-soft);color:var(--danger);border-radius:8px;padding:10px 12px;
+  font-size:13px;margin-bottom:14px}
+.note{background:var(--accent-soft);color:var(--accent);border-radius:8px;padding:10px 12px;
+  font-size:13px;margin-bottom:14px}
+
+/* ── dashboard ─────────────────────────────────────────── */
+.top{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between;
+  margin-bottom:20px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;
+  margin-bottom:18px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:13px 15px}
+.tile .n{font-size:25px;font-weight:650;letter-spacing:-.02em;line-height:1.1}
+.tile .l{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.05em;
+  margin-top:3px;font-weight:600}
+.bar{display:flex;gap:9px;margin-bottom:14px;flex-wrap:wrap;align-items:center}
+.bar input{max-width:260px}
+.scroll{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:12px}
+table{border-collapse:collapse;width:100%;min-width:980px}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.05em;
+  color:var(--dim);padding:11px 13px;border-bottom:1px solid var(--line);white-space:nowrap;
+  font-weight:600}
+td{padding:10px 13px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr.susp td{opacity:.5}
+td.mail{font-weight:550}
+td.num{font-variant-numeric:tabular-nums}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11.5px;font-weight:650;
+  letter-spacing:.02em;white-space:nowrap}
+.p-life{background:var(--accent);color:#fff}
+.p-free{background:var(--line);color:var(--dim)}
+.p-trial{background:var(--violet-soft);color:var(--violet)}
+.p-active{background:var(--accent-soft);color:var(--accent)}
+.p-lapsed{background:var(--warn-soft);color:var(--warn)}
+.p-susp{background:var(--danger-soft);color:var(--danger)}
+.nameedit{border:1px solid transparent;background:none;padding:5px 7px;border-radius:6px;
+  width:100%;min-width:130px}
+.nameedit:hover{border-color:var(--line)}
+.dev{font-weight:650}
+.devcell{border:none;background:none;padding:4px 9px;border-radius:6px;
+  font-variant-numeric:tabular-nums;font-size:14px}
+.devcell:hover{background:var(--line)}
+.dlist{display:flex;flex-direction:column;gap:9px;margin:4px 0 16px}
+.ditem{border:1px solid var(--line);border-radius:10px;padding:11px 13px}
+.ditem.gone{opacity:.5}
+.dname{font-weight:650;font-size:13.5px;display:flex;justify-content:space-between;
+  align-items:center;gap:10px}
+.dmeta{color:var(--dim);font-size:12px;margin-top:3px;font-variant-numeric:tabular-nums}
+.dcode{font-family:ui-monospace,Menlo,monospace;font-size:11px;font-weight:700;
+  color:var(--dim);background:var(--surface-1,var(--line));border:1px solid var(--line);
+  padding:1px 6px;border-radius:5px;letter-spacing:.06em;flex:0 0 auto}
+.dname-edit{font-size:11.5px;font-weight:700;color:var(--accent);background:none;
+  border:none;padding:4px 0 0;cursor:pointer}
+.dname-edit:hover{text-decoration:underline}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--line2);
+  flex:0 0 auto;display:inline-block}
+.dot.on{background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.22)}
+.ditem.live{border-color:#22c55e55;background:linear-gradient(0deg,var(--accent-soft),var(--accent-soft))}
+.dname{align-items:center}
+.dleft{display:flex;align-items:center;gap:9px;min-width:0}
+.dleft span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.onnow{color:#16a34a;font-weight:800}
+:root:not([data-theme="light"]) .onnow,
+:root[data-theme="dark"] .onnow{color:#4ade80}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]) .onnow{color:#4ade80} }
+.dmini{font-size:11.5px;font-weight:650;padding:3px 9px;border-radius:6px;flex:0 0 auto}
+.dev.hot{color:var(--danger)}
+.acts{display:flex;gap:5px;white-space:nowrap}
+.acts select{width:auto;padding:5px 8px;font-size:12.5px}
+.empty{padding:40px;text-align:center;color:var(--dim)}
+.flash{position:fixed;left:50%;transform:translateX(-50%);bottom:22px;background:var(--fg);
+  color:var(--bg);padding:10px 17px;border-radius:9px;font-size:13px;font-weight:550;
+  box-shadow:0 6px 22px rgba(0,0,0,.2);z-index:9}
+.gonemeta{color:var(--danger);font-weight:550}
+.selfnote{font-size:12px;color:var(--dim);font-style:italic;white-space:nowrap}
+.pwcell{font-family:ui-monospace,Menlo,monospace;letter-spacing:.12em;font-size:13px;
+  padding:5px 10px;color:var(--dim)}
+.pwcell:hover{color:var(--fg);border-color:var(--accent)}
+.warn{background:var(--warn-soft);color:var(--warn);border-radius:9px;padding:11px 13px;
+  font-size:13px;font-weight:600;margin-bottom:14px;line-height:1.5}
+dialog{border:1px solid var(--line);border-radius:14px;padding:0;background:var(--panel);
+  color:var(--fg);max-width:420px;width:calc(100% - 32px)}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+dialog form{padding:22px}
+dialog h2{margin:0 0 4px;font-size:17px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.gen{font-size:12px;color:var(--accent);background:none;border:none;padding:0;cursor:pointer;
+  font-weight:600}
+.gen:hover{text-decoration:underline}
+.cred{background:var(--accent-soft);border-radius:9px;padding:13px;margin-bottom:14px;
+  font-size:13px;line-height:1.7}
+.cred code{font-family:ui-monospace,Menlo,monospace;font-weight:650;user-select:all}
+details.audit{margin-top:22px;background:var(--panel);border:1px solid var(--line);
+  border-radius:12px;padding:13px 16px}
+details.audit summary{cursor:pointer;font-weight:600;font-size:13px}
+.logrow{display:grid;grid-template-columns:150px 1fr;gap:12px;padding:7px 0;
+  border-top:1px solid var(--line);font-size:12.5px}
+.logrow time{color:var(--dim);font-variant-numeric:tabular-nums}
+@media(max-width:620px){ .tile .n{font-size:21px} h1{font-size:17px} }
+</style>
+</head>
+<body>
+
+<!-- ───────────────── sign in ───────────────── -->
+<div id="login" class="wrap">
+  <form class="card" id="loginForm">
+    <div class="shuttle">🏸</div>
+    <h1>Badminton Admin</h1>
+    <p class="sub" style="margin-bottom:20px">Sign in with your host account.</p>
+    <div id="loginErr"></div>
+    <div class="field"><label for="em">Email</label>
+      <input id="em" type="email" autocomplete="username" required></div>
+    <div class="field"><label for="pw">Password</label>
+      <div class="pwwrap">
+        <input id="pw" type="password" autocomplete="current-password" required>
+        <button type="button" class="eye" data-for="pw">SHOW</button>
+      </div></div>
+    <button class="primary" style="width:100%;padding:10px" type="submit" id="loginBtn">Sign in</button>
+    <button type="button" class="ghost" id="forgot"
+      style="width:100%;margin-top:10px;font-size:13px">Forgot password?</button>
+  </form>
+</div>
+
+<!-- ───────────────── dashboard ───────────────── -->
+<div id="dash" class="wrap" hidden>
+  <div class="top">
+    <div>
+      <h1>Hosts</h1>
+      <p class="sub" id="who"></p>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button id="refresh">Refresh</button>
+      <button id="mypw">My password</button>
+      <button id="out" class="ghost">Sign out</button>
+    </div>
+  </div>
+
+  <div class="tiles" id="tiles"></div>
+
+  <div class="bar">
+    <input id="q" type="search" placeholder="Search email or name…">
+    <select id="filter" style="width:auto">
+      <option value="">All plans</option>
+      <option value="active">Premium</option>
+      <option value="trial">On trial</option>
+      <option value="free">No access</option>
+      <option value="lapsed">Lapsed</option>
+      <option value="_susp">Suspended</option>
+      <option value="_multi">2+ devices</option>
+    </select>
+    <button class="primary" id="addBtn" style="margin-left:auto">+ Add host</button>
+  </div>
+
+  <div class="scroll">
+    <table>
+      <thead><tr>
+        <th>Email</th><th>Username</th><th>Password</th><th>Plan</th><th>Expires</th>
+        <th>Devices</th><th>Joined</th><th>Last seen</th><th>Actions</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="empty" id="empty" hidden>No hosts match.</div>
+  </div>
+
+  <dialog id="addDlg">
+    <form method="dialog" id="addForm">
+      <h2>Add a host</h2>
+      <p class="sub" style="margin:0 0 18px">They sign in to the app with these.</p>
+      <div id="addErr"></div>
+      <div class="field"><label for="aEmail">Email</label>
+        <input id="aEmail" type="email" required placeholder="host@example.com"></div>
+      <div class="field">
+        <label for="aPass">Password
+          <button type="button" class="gen" id="genPw">generate</button></label>
+        <input id="aPass" type="text" required minlength="8" placeholder="at least 8 characters"></div>
+      <div class="field"><label for="aName">Name <span style="font-weight:400;text-transform:none">(optional)</span></label>
+        <input id="aName" type="text" placeholder="Budi — GOR Senayan"></div>
+      <div class="field"><label for="aPlan">Starting plan</label>
+        <select id="aPlan">
+          <option value="trial">14-day trial</option>
+          <option value="month">Premium — 1 month</option>
+          <option value="year">Premium — 1 year</option>
+          <option value="life">Lifetime premium</option>
+          <option value="free">No access yet</option>
+        </select></div>
+      <div class="row2" style="margin-top:20px">
+        <button type="button" id="addCancel">Cancel</button>
+        <button type="button" class="primary" id="addGo">Create</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="doneDlg">
+    <form method="dialog" style="padding:22px">
+      <h2>Account created</h2>
+      <p class="sub" style="margin:0 0 16px">Send these to the host. The password is not recoverable — copy it now.</p>
+      <div class="cred" id="doneCred"></div>
+      <div id="doneNote" data-note></div>
+      <div class="row2">
+        <button type="button" id="doneCopy">Copy both</button>
+        <button type="button" class="primary" id="doneOk">Done</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="myPwDlg">
+    <form method="dialog" style="padding:22px">
+      <h2>Change my password</h2>
+      <p class="sub" id="myPwWho" style="margin:0 0 16px"></p>
+      <div id="myPwErr"></div>
+      <div class="field"><label for="myPw1">New password</label>
+        <div class="pwwrap"><input id="myPw1" type="password" minlength="8" autocomplete="new-password">
+          <button type="button" class="eye" data-for="myPw1">SHOW</button></div></div>
+      <div class="field"><label for="myPw2">Type it again</label>
+        <div class="pwwrap"><input id="myPw2" type="password" minlength="8" autocomplete="new-password">
+          <button type="button" class="eye" data-for="myPw2">SHOW</button></div></div>
+      <div class="warn">You will be signed out and will need to sign in again with the new password.</div>
+      <div class="row2">
+        <button type="button" id="myPwCancel">Cancel</button>
+        <button type="button" class="primary" id="myPwGo">Change it</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="devDlg">
+    <form method="dialog" style="padding:22px">
+      <h2>Devices</h2>
+      <p class="sub" id="devWho" style="margin:0 0 16px"></p>
+      <div id="devNote" data-note></div>
+      <div id="devList"><p class="sub">Loading\u2026</p></div>
+      <button type="button" class="primary" id="devOk" style="width:100%">Close</button>
+    </form>
+  </dialog>
+
+  <dialog id="pwDlg">
+    <form method="dialog" style="padding:22px">
+      <h2>Set password</h2>
+      <p class="sub" id="pwWho" style="margin:0 0 16px"></p>
+      <div id="pwKnown"></div>
+      <div id="pwErr"></div>
+      <div class="field">
+        <label for="pwNew">New password
+          <button type="button" class="gen" id="pwGen">generate</button></label>
+        <input id="pwNew" type="text" minlength="8" placeholder="at least 8 characters"></div>
+      <div id="pwWarn"></div>
+      <div class="row2" style="margin-top:18px">
+        <button type="button" id="pwCancel">Cancel</button>
+        <button type="button" class="primary" id="pwSave">Set password</button>
+      </div>
+    </form>
+  </dialog>
+
+  <details class="audit">
+    <summary>Recent admin activity</summary>
+    <div id="log" style="margin-top:10px"></div>
+  </details>
+</div>
+
+<script>
+const SB  = 'https://ubgabydmcjwqfsffvwoz.supabase.co';
+const KEY = 'sb_publishable_R8HZkFXpwUlHvRkFlCLq5A_P2wGXmcY';
+
+let tok = null, me = null, data = [], refreshTok = null, tokExp = 0;
+
+/* Access tokens last an hour. Without this the dashboard silently rots:
+   the table keeps showing whatever it loaded while the token was good, and
+   every write fails with "Invalid session". */
+// Supabase refresh tokens are single-use and it watches for replays: fire
+// two refreshes with the same token and it revokes the ENTIRE session as a
+// suspected stolen token. api() called this on every request with no guard,
+// so a page load (admin_overview + audit_log) or clicking Add host mid-load
+// raced itself and signed the admin out. One refresh at a time, shared.
+let refreshing = null;
+
+async function ensureToken(){
+  if (!refreshTok) return !!tok;
+  if (tokExp && Date.now() < tokExp - 60000) return true;
+  if (refreshing) return refreshing;                  // join the one in flight
+
+  refreshing = (async () => {
+    try{
+      const r = await fetch(SB + '/auth/v1/token?grant_type=refresh_token', {
+        method:'POST', headers:{ apikey:KEY, 'Content-Type':'application/json' },
+        body: JSON.stringify({ refresh_token: refreshTok })
+      });
+      if (!r.ok){
+        // A failed refresh is not always a dead session -- the network may
+        // simply be down. Keep going on the current token if it has life
+        // left, rather than throwing the admin out mid-task.
+        return !!(tok && tokExp && Date.now() < tokExp);
+      }
+      const j = await r.json();
+      tok = j.access_token; refreshTok = j.refresh_token;
+      tokExp = Date.now() + (j.expires_in || 3600) * 1000;
+      if (j.user) me = j.user;
+      saveSession();
+      return true;
+    }catch(_){
+      return !!(tok && tokExp && Date.now() < tokExp);
+    }
+  })();
+
+  try { return await refreshing; }
+  finally { refreshing = null; }
+}
+
+function saveSession(){
+  try{ sessionStorage.setItem('bt', JSON.stringify(
+    { tok, refreshTok, tokExp, email: me?.email, id: me?.id })); }catch(_){}
+}
+
+const $  = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+/* Show/hide on any password field. Typing a generated password blind is how
+   you end up locked out of your own dashboard. */
+document.addEventListener('click', e => {
+  if (!e.target.classList.contains('eye')) return;
+  const inp = document.getElementById(e.target.dataset.for);
+  if (!inp) return;
+  const hidden = inp.type === 'password';
+  inp.type = hidden ? 'text' : 'password';
+  e.target.textContent = hidden ? 'HIDE' : 'SHOW';
+});
+
+/* A <dialog> opened with showModal() lives in the browser's TOP LAYER, which
+   sits above every z-index on the page, backdrop included. So flash() paints
+   UNDERNEATH an open dialog and the message is unreadable -- a failed rename
+   looked like a button that did nothing. Anything raised from inside a dialog
+   goes here instead, into the dialog itself. */
+function dlgNote(sel, msg, bad){
+  const el = $(sel); if (!el) return;
+  el.innerHTML = msg ? '<div class="' + (bad ? 'err' : 'note') + '">' + esc(msg) + '</div>' : '';
+}
+
+function flash(msg){
+  // Same top-layer problem: a toast raised while a dialog is open is painted
+  // behind it. Redirect it into that dialog rather than lose it.
+  const dlg = document.querySelector('dialog[open]');
+  const slot = dlg && dlg.querySelector('[data-note]');
+  if (slot){ slot.innerHTML = '<div class="note">' + esc(msg) + '</div>'; return; }
+  const d = document.createElement('div');
+  d.className = 'flash'; d.textContent = msg;
+  document.body.appendChild(d);
+  setTimeout(() => d.remove(), 2600);
+}
+
+async function api(path, opts = {}, retry = true){
+  await ensureToken();
+  const r = await fetch(SB + path, {
+    ...opts,
+    headers:{ apikey:KEY, Authorization:'Bearer ' + tok,
+              'Content-Type':'application/json', ...(opts.headers||{}) }
+  });
+  if (r.status === 401){
+    if (retry && await ensureToken()) return api(path, opts, false);
+    signOut(); throw new Error('Session expired — sign in again.');
+  }
+  const txt = await r.text();
+  const body = txt ? JSON.parse(txt) : null;
+  if (!r.ok) throw new Error(body?.message || ('HTTP ' + r.status));
+  return body;
+}
+
+/* ── auth ─────────────────────────────────────────────── */
+$('#loginForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const btn = $('#loginBtn'); btn.disabled = true; btn.textContent = 'Signing in…';
+  $('#loginErr').innerHTML = '';
+  try{
+    const r = await fetch(SB + '/auth/v1/token?grant_type=password', {
+      method:'POST', headers:{ apikey:KEY, 'Content-Type':'application/json' },
+      body: JSON.stringify({ email:$('#em').value.trim(), password:$('#pw').value })
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j.error_description || j.msg || 'Sign in failed.');
+
+    tok = j.access_token; refreshTok = j.refresh_token; me = j.user;
+    tokExp = Date.now() + (j.expires_in || 3600) * 1000;
+    $('#pw').value = '';
+
+    // Admin check happens in the DATABASE, not here. A non-admin simply
+    // gets no rows back; this lookup only produces a clearer message.
+    const self = await api('/rest/v1/hosts?select=is_admin,display_name,suspended&id=eq.' + me.id);
+    if (!self[0]?.is_admin){
+      tok = null;
+      throw new Error('That account is not an admin.');
+    }
+    // The Edge Function refuses a suspended admin, so signing in and then
+    // failing every write with "Not an admin" would be a baffling half-state.
+    if (self[0].suspended){
+      tok = null;
+      throw new Error('That account is suspended.');
+    }
+    saveSession();
+    openDash();
+  }catch(err){
+    $('#loginErr').innerHTML = '<div class="err">' + esc(err.message) + '</div>';
+  }finally{
+    btn.disabled = false; btn.textContent = 'Sign in';
+  }
+});
+
+function signOut(){
+  tok = null; me = null; refreshTok = null; tokExp = 0;
+  try{ sessionStorage.removeItem('bt'); }catch(_){}
+  $('#dash').hidden = true; $('#login').hidden = false;
+}
+$('#out').onclick = signOut;
+$('#refresh').onclick = () => load();
+
+function openDash(){
+  $('#login').hidden = true; $('#dash').hidden = false;
+  $('#who').textContent = 'Signed in as ' + (me?.email || '');
+  load();
+}
+
+/* ── data ─────────────────────────────────────────────── */
+async function load(){
+  try{
+    data = await api('/rest/v1/admin_overview?select=*&order=joined.desc');
+    render(); loadLog();
+  }catch(e){ flash(e.message); }
+}
+
+function tiles(){
+  const n = s => data.filter(h => h.plan === s && !h.suspended).length;
+  const week = Date.now() - 7*864e5;
+  const t = [
+    ['Hosts',      data.length],
+    ['Premium',    n('active')],
+    ['On trial',   n('trial')],
+    ['No access',  n('free') + n('lapsed')],
+    ['Suspended',  data.filter(h => h.suspended).length],
+    ['New this week', data.filter(h => new Date(h.joined).getTime() > week).length],
+    ['Shared?',    data.filter(h => (h.devices||0) > 1).length]
+  ];
+  $('#tiles').innerHTML = t.map(([l,v]) =>
+    `<div class="tile"><div class="n">${v}</div><div class="l">${l}</div></div>`).join('');
+}
+
+const fdate = d => d ? new Date(d).toLocaleDateString(undefined,
+  {day:'numeric',month:'short',year:'2-digit'}) : '—';
+
+function render(){
+  tiles();
+  const q = $('#q').value.trim().toLowerCase();
+  const f = $('#filter').value;
+
+  const rows = data.filter(h => {
+    if (q && !((h.email||'') + ' ' + (h.display_name||'')).toLowerCase().includes(q)) return false;
+    if (f === '_susp')  return h.suspended;
+    if (f === '_multi') return (h.devices||0) > 1;
+    if (f)              return h.plan === f && !h.suspended;
+    return true;
+  });
+
+  $('#empty').hidden = rows.length > 0;
+  $('#rows').innerHTML = rows.map(h => {
+    // Your own row carries no destructive control. Locking yourself out of
+    // the account you are signed in with has happened twice, and a row of
+    // small buttons on a narrow table is no place for it.
+    const self = h.id === (me && me.id);
+    const lifetime = h.plan === 'active' && !h.expires_at;
+    const plan = h.suspended ? 'susp' : lifetime ? 'life' : h.plan;
+    const label = h.suspended ? 'suspended'
+                : h.plan === 'free' ? 'no access'
+                : lifetime ? 'lifetime' : h.plan;
+    const exp = lifetime ? 'never'
+              : h.plan === 'trial' && h.trial_days_left != null
+                ? h.trial_days_left + 'd left' : fwhen(h.expires_at);
+    const dev = h.devices || 0;
+    return `<tr class="${h.suspended ? 'susp' : ''}" data-id="${h.id}">
+      <td class="mail">${esc(h.email)}</td>
+      <td><input class="nameedit" value="${esc(h.display_name || '')}"
+            data-orig="${esc(h.display_name || '')}" placeholder="—"></td>
+      <td>${self ? '<span class="selfnote">you</span>'
+        : `<button class="pwcell" title="Set a new password">\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022</button>`}</td>
+      <td><span class="pill p-${plan}">${label}</span></td>
+      <td class="num">${esc(exp)}</td>
+      <td class="num"><button class="devcell dev ${dev > 1 ? 'hot' : ''}"
+            title="See the devices">${dev}</button></td>
+      <td class="num">${fdate(h.joined)}</td>
+      <td class="num">${fdate(h.last_seen_at)}</td>
+      <td><div class="acts">${self
+        ? '<span class="selfnote">your own account</span>'
+        : `<select class="plan">
+          <option value="">Set plan…</option>
+          <option value="trial">14-day trial</option>
+          <option value="month">Premium +1 month</option>
+          <option value="year">Premium +1 year</option>
+          <option value="life">Lifetime premium</option>
+          <option value="free">Revoke access</option>
+        </select>
+        <button class="susp-btn">${h.suspended ? 'Restore' : 'Suspend'}</button>
+        <button class="del-btn" title="Delete account permanently">Del</button>`}
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+$('#q').oninput = render;
+$('#filter').onchange = render;
+
+/* ── edits ────────────────────────────────────────────── */
+$('#rows').addEventListener('change', async e => {
+  const tr = e.target.closest('tr'); if (!tr) return;
+  const id = tr.dataset.id;
+
+  if (e.target.classList.contains('nameedit')){
+    const v = e.target.value.trim();
+    if (v === e.target.dataset.orig) return;
+    if (!confirm('Rename to "' + (v || '\u2014') + '"?')){
+      e.target.value = e.target.dataset.orig; return;
+    }
+    try{
+      await api('/rest/v1/hosts?id=eq.' + id, {
+        method:'PATCH', body: JSON.stringify({ display_name: v || null }) });
+      e.target.dataset.orig = v; flash('Username saved');
+      const h = data.find(x => x.id === id); if (h) h.display_name = v;
+    }catch(err){ flash(err.message); e.target.value = e.target.dataset.orig; }
+  }
+
+  if (e.target.classList.contains('plan')){
+    const choice = e.target.value; e.target.value = '';
+    if (!choice) return;
+    const LBL = { trial:'a 14-day trial', month:'Premium for 1 month',
+                  year:'Premium for 1 year', life:'LIFETIME premium (never expires)',
+                  free:'no access' };
+    const who = data.find(x => x.id === id);
+    if (!confirm('Set ' + who.email + ' to ' + LBL[choice] + '?' +
+                 (choice === 'free'
+                   ? '\n\nThey are locked out of the app immediately. Nothing is deleted.'
+                   : ''))) return;
+    const now = new Date();
+    const plus = d => new Date(now.getTime() + d*864e5).toISOString();
+    // A null expiry never expires -- that is what makes lifetime work, both
+    // here and in the database's own is_premium() check.
+    const map = {
+      trial: { status:'trial',  expires_at: plus(14),  source:'admin:trial' },
+      month: { status:'active', expires_at: plus(30),  source:'admin:manual' },
+      year:  { status:'active', expires_at: plus(365), source:'admin:manual' },
+      life:  { status:'active', expires_at: null,      source:'admin:lifetime' },
+      free:  { status:'free',   expires_at: null,      source:'admin:revoked' }
+    };
+    try{
+      await api('/rest/v1/entitlements', {
+        method:'POST',
+        headers:{ Prefer:'resolution=merge-duplicates' },
+        body: JSON.stringify({ host_id:id, ...map[choice], updated_at:new Date().toISOString() })
+      });
+      flash('Plan updated'); load();
+    }catch(err){ flash(err.message); }
+  }
+});
+
+$('#rows').addEventListener('click', async e => {
+  const tr0 = e.target.closest('tr');
+  if (!tr0) return;
+  const rid = tr0.dataset.id, rh = data.find(x => x.id === rid);
+
+  if (e.target.classList.contains('devcell')){ openDevices(rid); return; }
+  if (e.target.classList.contains('pwcell')){ openPw(rid); return; }
+
+  if (e.target.classList.contains('del-btn')){
+    if (!confirm('PERMANENTLY delete ' + rh.email + '?\n\nThis erases their account and every group, player and session they own. It cannot be undone.\n\nTo just cut off access, use Suspend instead.')) return;
+    if (prompt('Type DELETE to confirm.') !== 'DELETE'){ flash('Cancelled'); return; }
+    try{ await fn({ action:'delete', id:rid }); pwDel(rid); flash('Account deleted'); load(); }
+    catch(err){ flash(err.message); }
+    return;
+  }
+
+  if (!e.target.classList.contains('susp-btn')) return;
+  const tr = tr0, id = rid;
+  const h = rh;
+  const next = !h.suspended;
+  if (next && !confirm('Suspend ' + h.email + '?\n\nEvery device is signed out at once and the password stops working \u2014 they cannot sign in again until you restore them. Nothing is deleted, and this can be undone.')) return;
+  try{
+    // Not a PATCH. A flag on a row is only a request the app may honour; this
+    // ends their sessions AND bans the login, so there is nothing left to honour.
+    await api('/rest/v1/rpc/admin_set_suspended', {
+      method:'POST', body: JSON.stringify({ p_host: id, p_suspend: next }) });
+    flash(next ? 'Suspended \u2014 signed out everywhere' : 'Restored'); load();
+  }catch(err){ flash(err.message); }
+});
+
+/* ── account management (via the Edge Function) ───────── */
+async function fn(payload, retry = true){
+  await ensureToken();
+  const r = await fetch(SB + '/functions/v1/admin-users', {
+    method:'POST',
+    headers:{ apikey:KEY, Authorization:'Bearer ' + tok, 'Content-Type':'application/json' },
+    body: JSON.stringify(payload)
+  });
+  let j = null;
+  try{ j = await r.json(); }catch(_){}
+  if (r.status === 401 && retry){
+    if (await ensureToken()) return fn(payload, false);
+    signOut(); throw new Error('Session expired — sign in again.');
+  }
+  if (!r.ok) throw new Error(j?.error || ('Request failed (' + r.status + ')'));
+  return j;
+}
+
+const addDlg = $('#addDlg'), doneDlg = $('#doneDlg');
+
+function makePw(){
+  // Readable but not guessable: no look-alike characters.
+  const a = 'abcdefghijkmnopqrstuvwxyz', A = 'ABCDEFGHJKLMNPQRSTUVWXYZ', n = '23456789';
+  const pool = a + A + n, r = new Uint32Array(14);
+  crypto.getRandomValues(r);
+  return [...r].map(x => pool[x % pool.length]).join('');
+}
+
+$('#addBtn').onclick = () => {
+  $('#addErr').innerHTML = '';
+  $('#aEmail').value = ''; $('#aName').value = '';
+  $('#aPass').value = makePw(); $('#aPlan').value = 'trial';
+  addDlg.showModal();
+};
+$('#genPw').onclick = () => { $('#aPass').value = makePw(); };
+$('#addCancel').onclick = () => addDlg.close();
+
+$('#addGo').onclick = async () => {
+  const btn = $('#addGo');
+  const email = $('#aEmail').value.trim(), password = $('#aPass').value;
+  if (!email.includes('@')){ $('#addErr').innerHTML = '<div class="err">Enter a valid email.</div>'; return; }
+  if (password.length < 8){ $('#addErr').innerHTML = '<div class="err">Password needs 8+ characters.</div>'; return; }
+  btn.disabled = true; btn.textContent = 'Creating…';
+  try{
+    const made = await fn({ action:'create', email, password,
+               display_name: $('#aName').value.trim(), plan: $('#aPlan').value });
+    if (made?.id) pwSet(made.id, password);
+    addDlg.close();
+    $('#doneCred').innerHTML =
+      'Email <code>' + esc(email) + '</code><br>Password <code>' + esc(password) + '</code>';
+    doneDlg.dataset.copy = email + '\n' + password;
+    dlgNote('#doneNote', '', false);
+    doneDlg.showModal();
+    load();
+  }catch(err){
+    $('#addErr').innerHTML = '<div class="err">' + esc(err.message) + '</div>';
+  }finally{ btn.disabled = false; btn.textContent = 'Create'; }
+};
+
+$('#doneOk').onclick = () => doneDlg.close();
+$('#doneCopy').onclick = async () => {
+  try{
+    await navigator.clipboard.writeText(doneDlg.dataset.copy || '');
+    dlgNote('#doneNote', 'Copied.', false);
+  }catch(_){ dlgNote('#doneNote', 'Could not copy \u2014 select the text above and copy it manually.', true); }
+};
+
+/* Changing your own password is deliberate: two fields that must match,
+   never a single button in a row. The row-level one-tap reset locked this
+   account out twice. */
+const myPwDlg = $('#myPwDlg');
+$('#mypw').onclick = () => {
+  $('#myPwErr').innerHTML = ''; $('#myPw1').value = ''; $('#myPw2').value = '';
+  $('#myPwWho').textContent = me?.email || '';
+  myPwDlg.showModal();
+};
+$('#myPwCancel').onclick = () => myPwDlg.close();
+$('#myPwGo').onclick = async () => {
+  const a = $('#myPw1').value, b = $('#myPw2').value;
+  const err = m => { $('#myPwErr').innerHTML = '<div class="err">' + esc(m) + '</div>'; };
+  if (a.length < 8) return err('Use at least 8 characters.');
+  if (a !== b)      return err('The two passwords do not match.');
+  const btn = $('#myPwGo'); btn.disabled = true; btn.textContent = 'Changing\u2026';
+  try{
+    await ensureToken();
+    const r = await fetch(SB + '/auth/v1/user', {
+      method:'PUT',
+      headers:{ apikey:KEY, Authorization:'Bearer ' + tok, 'Content-Type':'application/json' },
+      body: JSON.stringify({ password: a })
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.msg || j.error_description || 'Could not change it.');
+    myPwDlg.close();
+    flash('Password changed \u2014 sign in again');
+    setTimeout(signOut, 900);
+  }catch(e){ err(String(e.message)); }
+  finally{ btn.disabled = false; btn.textContent = 'Change it'; }
+};
+
+/* The real safety net. Works even when you are completely locked out, and
+   needs no service key -- Supabase emails a reset link. */
+$('#forgot').onclick = async () => {
+  const email = $('#em').value.trim();
+  const box = $('#loginErr');
+  if (!email.includes('@')){
+    box.innerHTML = '<div class="err">Type your email above first, then tap this.</div>'; return;
+  }
+  const btn = $('#forgot'); btn.disabled = true; btn.textContent = 'Sending\u2026';
+  try{
+    await fetch(SB + '/auth/v1/recover', {
+      method:'POST', headers:{ apikey:KEY, 'Content-Type':'application/json' },
+      body: JSON.stringify({ email })
+    });
+    // Always the same message: whether an address has an account is not ours to leak.
+    box.innerHTML = '<div class="cred">If that address has an account, a reset link is on its way. Check spam too.</div>';
+  }catch(_){
+    box.innerHTML = '<div class="err">Could not send it. Check your connection.</div>';
+  }finally{ btn.disabled = false; btn.textContent = 'Forgot password?'; }
+};
+
+/* ── device detail ────────────────────────────────────────
+   The count alone cannot tell "one person with a phone, a tablet and a
+   laptop" apart from "one login passed round a club". The labels can. */
+const devDlg = $('#devDlg');
+let devTimer = null, devOpenFor = null;
+$('#devOk').onclick = () => {
+  devDlg.close();
+  if (devTimer){ clearInterval(devTimer); devTimer = null; }
+  devOpenFor = null;
+};
+
+// "Online" can only ever mean "reported in recently" -- a browser that is
+// closed cannot tell us it closed. The app heartbeats every 5 minutes while
+// open, so two missed beats plus slack is a fair cut-off.
+const ONLINE_MS = 11 * 60 * 1000;
+const isOnline = r => !r.revoked && r.last_seen &&
+  (Date.now() - new Date(r.last_seen).getTime()) < ONLINE_MS;
+
+const exact = t => t ? new Date(t).toLocaleString(undefined,
+  { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit', second:'2-digit' }) : '';
+
+const ago = t => {
+  if(!t) return 'never';
+  const m = Math.floor((Date.now() - new Date(t)) / 60000);
+  if (m < 2)    return 'just now';
+  if (m < 60)   return m + ' min ago';
+  if (m < 1440) return Math.floor(m/60) + 'h ago';
+  const d = Math.floor(m/1440);
+  return d === 1 ? 'yesterday' : d + ' days ago';
+};
+
+async function openDevices(id){
+  const h = data.find(x => x.id === id); if(!h) return;
+  $('#devWho').textContent = h.email;
+  // Only show the loading state on a fresh open; a silent refresh should not
+  // blank the list you are reading.
+  if (!devDlg.open){ $('#devList').innerHTML = '<p class="sub">Loading\u2026</p>';
+                     dlgNote('#devNote', '', false); }
+  devOpenFor = id;
+  if (!devDlg.open) devDlg.showModal();
+  // Refresh while it is open, so the dots mean "now" rather than "when I
+  // clicked". Cheap: one small query a minute, only while you are looking.
+  if (devTimer) clearInterval(devTimer);
+  devTimer = setInterval(() => {
+    if (devDlg.open && devOpenFor) openDevices(devOpenFor);
+    else { clearInterval(devTimer); devTimer = null; }
+  }, 60000);
+  try{
+    const rows = await api('/rest/v1/devices?select=*&order=last_seen.desc&host_id=eq.' + id);
+    // Two identical iPhones report the same label, so the first four
+    // characters of the device's own key are what separate them. Stable for
+    // the life of that install, and already stored.
+    const code = r => (r.device_key || '').replace(/[^a-z0-9]/gi,'').slice(0,4).toLowerCase();
+    if (!rows.length){
+      $('#devList').innerHTML =
+        '<p class="sub">No devices yet \u2014 this account has never opened the app.</p>';
+      return;
+    }
+    const many = rows.filter(r => !r.revoked).length > 2;
+    const liveNow = rows.filter(isOnline).length;
+    $('#devList').innerHTML =
+      (many ? '<div class="warn">More than two active devices. Worth a look.</div>' : '') +
+      (liveNow > 1 ? '<div class="warn">' + liveNow +
+        ' devices active right now \u2014 one login cannot be in two places.</div>' : '') +
+      '<div class="dlist">' + rows.map(r => {
+        const on = isOnline(r);
+        return `
+        <div class="ditem ${r.revoked ? 'gone' : ''} ${on ? 'live' : ''}">
+          <div class="dname">
+            <span class="dleft"><i class="dot ${on ? 'on' : ''}"></i>
+              <span>${esc(r.name || r.label || 'Unknown device')}</span>
+              <span class="dcode">${esc(code(r))}</span></span>
+            ${r.revoked
+              ? '<button type="button" class="dmini drestore" data-d="' + r.id + '">Restore access</button>'
+                + '<button type="button" class="dmini ddel" data-d="' + r.id + '">Forget</button>'
+              : '<button type="button" class="dmini revoke" data-d="' + r.id + '">Remove access</button>'}
+          </div>
+          ${r.revoked ? '<div class="dmeta gonemeta">Barred \u2014 signed out, and signing in again will not work on this device.</div>' : ''}
+          <button type="button" class="dname-edit" data-d="${r.id}" data-k="${esc(r.device_key || '')}"
+             data-n="${esc(r.name || '')}">${r.name ? 'Rename' : '+ Name this device'}</button>
+          ${r.name ? `<div class="dmeta">${esc(r.label || '')}</div>` : ''}
+          <div class="dmeta">${on
+              ? '<span class="onnow">\u25cf Online</span>'
+              : 'Last used ' + ago(r.last_seen)}
+            \u00b7 ${esc(exact(r.last_seen))}
+            \u00b7 first seen ${esc(exact(r.first_seen))}</div>
+        </div>`; }).join('') + '</div>';
+  }catch(err){
+    $('#devList').innerHTML = '<div class="err">' + esc(err.message) + '</div>';
+  }
+}
+
+$('#devList').addEventListener('click', async e => {
+  if (e.target.classList.contains('dname-edit')){
+    const did = e.target.dataset.d;
+    const dkey = e.target.dataset.k || '';
+    const cur = e.target.dataset.n || '';
+    const next = prompt('Name this device\n\nSomething you will recognise \u2014 "Budi\u2019s phone", "the one at GOR Senayan".', cur);
+    if (next === null) return;
+    try{
+      // Key, not row id: the same physical device has one row per account it
+      // has signed into. Naming it once should name it everywhere.
+      await api('/rest/v1/devices?device_key=eq.' + encodeURIComponent(dkey), {
+        method:'PATCH', body: JSON.stringify({ name: next.trim() || null }) });
+      dlgNote('#devNote', next.trim() ? 'Device named everywhere it appears.' : 'Name removed.', false);
+      const hid = data.find(h => h.email === $('#devWho').textContent)?.id;
+      if (hid) openDevices(hid);
+    }catch(err){ dlgNote('#devNote', 'Could not rename it \u2014 ' + err.message, true); }
+    return;
+  }
+
+  if (e.target.classList.contains('drestore')){
+    const did = e.target.dataset.d;
+    try{
+      await api('/rest/v1/devices?id=eq.' + did, {
+        method:'PATCH', body: JSON.stringify({ revoked: false }) });
+      dlgNote('#devNote', 'Access restored \u2014 they can sign in on it again.', false);
+      const id = data.find(h => h.email === $('#devWho').textContent)?.id;
+      if (id) openDevices(id);
+      load();
+    }catch(err){ dlgNote('#devNote', 'Could not restore it \u2014 ' + err.message, true); }
+    return;
+  }
+
+  if (e.target.classList.contains('ddel')){
+    const did = e.target.dataset.d;
+    if (!confirm('Forget this device?\n\nWARNING: this LIFTS the ban. The record is erased, so the next time that device signs in it is treated as brand new and let straight in.\n\nTo keep it barred, leave it as it is.')) return;
+    try{
+      await api('/rest/v1/devices?id=eq.' + did, { method:'DELETE' });
+      dlgNote('#devNote', 'Device forgotten \u2014 the ban is lifted.', false);
+      const id = data.find(h => h.email === $('#devWho').textContent)?.id;
+      if (id) openDevices(id);
+      load();
+    }catch(err){ dlgNote('#devNote', 'Could not forget it \u2014 ' + err.message, true); }
+    return;
+  }
+
+  if (!e.target.classList.contains('revoke')) return;
+  const did = e.target.dataset.d;
+  if (!confirm('Remove access on this device?\n\nIts session ends at once and the app signs out there. From then on this device is barred: the password still works, but it is signed out again every time. The host\u2019s other devices are untouched and nothing on the phone is deleted.\n\nUse Restore access to let it back in.')) return;
+  try{
+    // Not a PATCH. The function ends that ONE session in auth.sessions, so the
+    // refresh token dies with it -- the device cannot renew itself. A plain
+    // revoked=true would only have been a note to ourselves.
+    await api('/rest/v1/rpc/admin_remove_device_access', {
+      method:'POST', body: JSON.stringify({ p_device: did }) });
+    dlgNote('#devNote', 'Access removed \u2014 that device is signed out.', false);
+    const id = data.find(h => h.email === $('#devWho').textContent)?.id;
+    if (id) openDevices(id);
+    load();
+  }catch(err){ dlgNote('#devNote', 'Could not remove access \u2014 ' + err.message, true); }
+});
+
+/* ── issued passwords, remembered on THIS MAC only ────────
+   Supabase stores a bcrypt hash, so an existing password can never be read
+   back -- not by this page, not by the service key, not by anyone. What we
+   can do is remember what this dashboard itself issued, in this browser's
+   own storage. It is never sent anywhere. Clear your browser data and it is
+   gone, which costs you nothing: resetting a password is one click. */
+const PW_LS = 'badminton_issued_pw';
+const pwAll = () => { try{ return JSON.parse(localStorage.getItem(PW_LS)||'{}') }catch(_){ return {} } };
+const pwGet = id => pwAll()[id] || null;
+const pwSet = (id,v) => { try{ const a=pwAll(); a[id]=v; localStorage.setItem(PW_LS,JSON.stringify(a)); }catch(_){} };
+const pwDel = id => { try{ const a=pwAll(); delete a[id]; localStorage.setItem(PW_LS,JSON.stringify(a)); }catch(_){} };
+
+const pwDlg = $('#pwDlg');
+let pwTarget = null, pwArmed = false;
+
+function openPw(id){
+  const h = data.find(x => x.id === id); if(!h) return;
+  pwTarget = id; pwArmed = false;
+  $('#pwWho').textContent = h.email;
+  $('#pwErr').innerHTML = '';
+  $('#pwWarn').innerHTML = '';
+  $('#pwNew').value = '';
+  $('#pwSave').textContent = 'Set password';
+  const known = pwGet(id);
+  $('#pwKnown').innerHTML = known
+    ? '<div class="cred">Last issued from this Mac:<br><code>' + esc(known) + '</code></div>'
+    : '<div class="warn">No record of this one on this Mac. Existing passwords cannot be read back \u2014 only replaced.</div>';
+  pwDlg.showModal();
+}
+
+$('#pwGen').onclick = () => { $('#pwNew').value = makePw(); };
+$('#pwCancel').onclick = () => pwDlg.close();
+
+$('#pwSave').onclick = async () => {
+  const v = $('#pwNew').value.trim();
+  if(v.length < 8){
+    $('#pwErr').innerHTML = '<div class="err">Password needs at least 8 characters.</div>';
+    return;
+  }
+  // One-time confirmation: the first click arms, the second commits.
+  if(!pwArmed){
+    pwArmed = true;
+    $('#pwWarn').innerHTML = '<div class="warn">This replaces their password immediately. They will be signed out of the app. Click again to confirm.</div>';
+    $('#pwSave').textContent = 'Confirm change';
+    return;
+  }
+  const btn = $('#pwSave'); btn.disabled = true; btn.textContent = 'Saving\u2026';
+  try{
+    await fn({ action:'password', id:pwTarget, password:v });
+    pwSet(pwTarget, v);
+    pwDlg.close(); flash('Password changed');
+    render();
+  }catch(err){
+    $('#pwErr').innerHTML = '<div class="err">' + esc(err.message) + '</div>';
+  }finally{
+    btn.disabled = false; btn.textContent = 'Set password'; pwArmed = false;
+    $('#pwWarn').innerHTML = '';
+  }
+};
+
+/* ── audit ────────────────────────────────────────────── */
+async function loadLog(){
+  try{
+    const rows = await api('/rest/v1/audit_log?select=*&order=at.desc&limit=25');
+    $('#log').innerHTML = rows.length ? rows.map(r => {
+      const d = r.detail || {};
+      const to = d.to ? `→ <b>${esc(d.to)}</b>` : '';
+      const from = d.from ? `from ${esc(d.from)} ` : '';
+      return `<div class="logrow">
+        <time>${new Date(r.at).toLocaleString(undefined,{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</time>
+        <div>${esc(r.action)} ${from}${to}
+          <span style="color:var(--dim)"> · by ${esc(r.actor_email || 'system')}</span></div>
+      </div>`;
+    }).join('') : '<p class="sub">Nothing yet.</p>';
+  }catch(_){ }
+}
+
+/* ── resume a session on reload ───────────────────────── */
+(async () => {
+  let saved = null;
+  try{ saved = JSON.parse(sessionStorage.getItem('bt') || 'null'); }catch(_){}
+  if (!saved || !saved.tok) return;
+  tok = saved.tok; refreshTok = saved.refreshTok || null; tokExp = saved.tokExp || 0;
+  try{
+    if (!(await ensureToken())) throw 0;
+    const r = await fetch(SB + '/auth/v1/user', {
+      headers:{ apikey:KEY, Authorization:'Bearer ' + tok } });
+    if (!r.ok) throw 0;
+    me = await r.json();
+    openDash();
+  }catch(_){ signOut(); }
+})();
+</script>
+</body>
+</html>
