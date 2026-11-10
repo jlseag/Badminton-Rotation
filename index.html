@@ -492,7 +492,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v57';   // bump together with V in sw.js
+const BUILD='v58';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -1987,10 +1987,39 @@ function chooseFour(order, st, str, justFinished){
   if(flex.length <= need) return pairFour(must.concat(flex).slice(0, 4), st, str);
 
   flex = flex.slice(0, 8);                          // keep the search small
+
+  /* Same level has to MEAN same level, down here too.
+     The skill-window search above needs eight free players, and between
+     4*courts+5 and 4*courts+7 the pool never reaches that -- at fourteen
+     players on two courts it is always six, so the window branch never ran
+     once in 240 measured draws. All that was left to group by skill was
+     spreadCost(), 1.4 per rank-unit squared, which a repeated foursome at up
+     to 8400 or a repeated partner at ~230 simply outbid. Measured there:
+     54% of courts spanned two or more tiers, and a tighter court had been
+     legally available for 48 of them. That is how an Advanced ended up
+     beside a Beginner against two Intermediates in Same level.
+     So: find the tightest tier gap that fairness actually permits, and
+     refuse to exceed it. Fairness still leads -- the must/flex split is
+     untouched, and the cap is computed from the same candidates -- and the
+     cost terms still choose among the courts that tie. */
+  let gapCap = 99;
+  if(level){
+    const probe = (start, acc) => {
+      if(acc.length === need){
+        const g = tierGap(must.concat(acc));
+        if(g < gapCap) gapCap = g;
+        return;
+      }
+      for(let i = start; i < flex.length; i++) probe(i + 1, acc.concat(flex[i]));
+    };
+    probe(0, []);
+  }
+
   let best = null;
   const pick = (start, acc) => {
     if(acc.length === need){
       const four = must.concat(acc);
+      if(level && tierGap(four) > gapCap) return;
       const r = pairFour(four, st, str);
       // Among players on equal games, variety is the tie-break -- but not an
       // unlimited one. Someone who has sat out several rotations should be
