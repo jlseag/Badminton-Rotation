@@ -125,6 +125,8 @@ nav button.on{color:var(--court);background:rgba(14,138,79,.11)}
 .tag.y{background:#FFF0C9;color:#7A5A00}
 .tag.r{background:var(--red-l);color:var(--red-d)}
 .tag.b{background:#E2F2E7;color:var(--court-d)}
+.tag.ver{background:rgba(255,255,255,.22);color:#fff;border:1.5px solid rgba(255,255,255,.45);
+  letter-spacing:.4px;text-transform:none}
 .note{background:#FFF8E4;border:2px solid #F3DFA6;color:#7A5A00;
   border-radius:var(--r-sm);padding:12px 14px;font-size:13.5px;font-weight:700;margin-bottom:11px}
 .note.err{background:var(--red-l);border-color:#F3C9C9;color:var(--red-d)}
@@ -145,7 +147,7 @@ nav button.on{color:var(--court);background:rgba(14,138,79,.11)}
 .handle{cursor:grab;color:var(--ink3);padding:0 2px;font-size:16px;letter-spacing:-2px}
 [data-tier=adv]{--tc:#4A33C8;--tcs:#ECE9FC;--tct:#3A2BA8;--tcf:#fff}
 [data-tier=upp]{--tc:#2878D0;--tcs:#E4EEFB;--tct:#1F5CA0;--tcf:#fff}
-[data-tier=int]{--tc:#0E9BC4;--tcs:#E0F3F9;--tct:#0A6E8C;--tcf:#fff}
+[data-tier=int]{--tc:#58C7EC;--tcs:#E4F6FD;--tct:#0A6E8C;--tcf:#05303F}
 [data-tier=beg]{--tc:#E8A00B;--tcs:#FCF0D6;--tct:#8A5B00;--tcf:#3D2A00}
 .tier .tier-n{color:var(--tct)}
 .tier .tier-c{background:var(--tc);color:var(--tcf)}
@@ -179,14 +181,30 @@ nav button.on{color:var(--court);background:rgba(14,138,79,.11)}
   font-size:10.5px;font-weight:900;letter-spacing:.09em;text-transform:uppercase;
   color:var(--ink3)}
 .qdiv::before,.qdiv::after{content:"";flex:1;height:2px;background:var(--line)}
-.isaway{opacity:.55}
+/* Away is a quiet state, not an alarm: the row settles back to a faint grey
+   and the name mutes with it. The skill colour is left alone -- the stripe
+   and the rank badge still say which group they are in, because that is what
+   the host is scanning for when she brings them back. */
+.isaway{background:#F0F3F0;border-color:#E2E7E2;border-bottom-color:#D5DCD6}
+.isaway .pname{color:var(--ink2)}
+.isaway .grip{color:#B4C0B6}
 .awaytag{margin-left:7px;font-size:10.5px;font-weight:900;letter-spacing:.06em;
-  text-transform:uppercase;color:var(--ink3);background:var(--line);
+  text-transform:uppercase;color:var(--red-d);background:var(--red-l);
   padding:2px 7px;border-radius:999px;vertical-align:1px}
-.awaybtn{flex:0 0 auto;touch-action:manipulation;font-size:11.5px;font-weight:800;color:var(--ink2);
-  background:var(--ground);border:2px solid var(--line);border-radius:9px;
-  padding:6px 10px;margin-right:4px}
-.awaybtn:active{background:var(--line)}
+.awaybtn{flex:0 0 auto;touch-action:manipulation;font-size:11.5px;font-weight:800;
+  border-radius:9px;padding:6px 10px;margin-right:4px;border:2px solid;
+  min-width:64px;text-align:center}   /* Away and Back are the same size */
+/* Named for what the button DOES: taking someone off is a red action,
+   putting them back is a green one.
+   The letters carry the weight. The fill is a faint tint and the border
+   sits between the two -- softer than the text, but still enough colour that
+   the grey of an away row cannot flatten the pill, which is what happened
+   when the border was nearly white. A solid fill reads as a warning the host
+   has to deal with, which is wrong for a control she taps all evening. */
+.awaybtn.go-away{color:var(--red-d);background:var(--red-l);border-color:#EDA6A6}
+.awaybtn.go-away:active{background:#FBD9D9}
+.awaybtn.go-back{color:var(--court-d);background:#E2F2E7;border-color:#95CDA9}
+.awaybtn.go-back:active{background:#CFE9D7}
 .pitem{touch-action:pan-y;user-select:none;-webkit-user-select:none;
   -webkit-touch-callout:none}   /* pan-y keeps the list scrollable; the grip blocks panning */
 .pitem.lifted{position:fixed;z-index:300;pointer-events:none;margin:0;
@@ -474,7 +492,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v56';   // bump together with V in sw.js
+const BUILD='v57';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -493,7 +511,7 @@ function defState(){return{
   matches:[],                 // finished matches, oldest first
   recentQuads:{},             // foursome -> match index it last played, for variety
   settings:{
-    courts:2, mode:'firstto', total:21, earlyRounds:4,
+    courts:2, mode:'firstto', total:21,
     scoring:'wins',
     partnerStrict:4, oppStrict:3, balance:3,
     pairing:'level', rankBy:'points', allowOverride:false, noise:3
@@ -661,12 +679,7 @@ function stats(){
   Object.values(m).forEach(s=>{s.avg=s.games?s.pts/s.games:0;s.wr=s.games?s.wins/s.games:0});
   return m;
 }
-/* A notional round: how many each court has got through on average. Used
-   only to decide when a session stops being a warm-up. Rolling has no rounds
-   of its own. */
-const roundsDone=()=> Math.floor(((S.matches||[]).length)/Math.max(1,activeCourts()));
 const matchesDone=()=> (S.matches||[]).length;
-const isCompetitive=()=>roundsDone()>=S.settings.earlyRounds;
 
 /* ------------- skill score, from placement alone (5-95) ------------------ */
 function strengths(st){
@@ -772,8 +785,10 @@ function render(){
   const done = `${(S.matches||[]).length} match${(S.matches||[]).length===1?'':'es'}`;
   $('#hSub').textContent =
       `${present().length} player${present().length===1?'':'s'} · ${activeCourts()||'no'} court${activeCourts()===1?'':'s'} · ${done}`;
-  $('#hRight').innerHTML = S.started&&tab!=='settings'
-      ? `<span class="tag ${isCompetitive()?'r':'b'}">${isCompetitive()?'Competitive':'Warm-up'}</span>`:'';
+  /* The build, on every screen. Hosts send screenshots when something looks
+     wrong, and the first thing worth knowing is whether they are on the
+     version the fix went into. */
+  $('#hRight').innerHTML = `<span class="tag ver">${BUILD}</span>`;
   wire();
   save();
 }
@@ -1294,7 +1309,7 @@ function tierList(){
           return `<div class="pitem ${p.away?'isaway':''}" data-id="${p.id}">
             <span class="pnum ${n===1?'s1':''}">${n}</span>
             <span class="pname">${esc(p.name)}${p.away?'<span class="awaytag">away</span>':''}</span>
-            <button class="awaybtn" title="${p.away?'Bring back':'Mark away'}"
+            <button class="awaybtn ${p.away?'go-back':'go-away'}" title="${p.away?'Bring back':'Mark away'}"
               onclick="event.stopPropagation();setAway('${p.id}',${p.away?'false':'true'})">${p.away?'Back':'Away'}</button>
             <span class="grip" aria-label="Drag to reorder"><svg viewBox="0 0 24 24">
               <path d="M5 9h14M5 15h14"/></svg></span>
@@ -1311,11 +1326,9 @@ function viewPlayers(st){
   <div class="card">
     <div class="row"><input id="newName" placeholder="Add a player" autocomplete="off" enterkeyhint="done">
       <button class="btn pri" style="flex:none;padding:0 18px" onclick="addPlayer()">Add</button></div>
-    <div class="muted" style="margin-top:8px">New players join as Intermediate on 0 points, and get priority for playing time.</div>
   </div>
   <div class="sec-h">Skill order</div>
-  <div class="muted" style="margin:-4px 4px 12px">Advanced is strongest. Drag the <b>\u2261 handle</b> to move someone \u2014 between groups or within one.
-    Tap a name to rename, re-group or remove. The number is their overall rank \u2014
+  <div class="muted" style="margin:-4px 4px 12px">Tap a name to rename, re-group or remove. The number is their overall rank \u2014
     this order is what decides match levels. Points are just the scoreboard.</div>
   ${tierList()}`;
 }
@@ -1594,7 +1607,16 @@ function addPlayer(){
   if(S.players.some(p=>p.name.toLowerCase()===name.toLowerCase())){toast('That name is already in the list',1);return}
   // qg = queue games (ordering only, reset on return from away).
   // games on the leaderboard is derived from history and is never touched.
-  S.players.push({id:uid(),name,tier:'int',addedRound:roundsDone()+1,
+  /* Straight in at number one, at the top of Advanced. Someone who has just
+     walked in is the person the host is about to move to their real level,
+     and hunting for them at the bottom of a long list is the slow part --
+     so they land where the eye already is, one drag from anywhere.
+     This does mean the matchmaker reads them as the strongest player in the
+     room until she moves them, which is the trade the host asked for: easy
+     to re-place beats correctly placed for the ten seconds it lasts.
+     unshift plus a stable sortByTier keeps them first; several arriving at
+     once stack up at the top, newest first. */
+  S.players.unshift({id:uid(),name,tier:'adv',
                   away:false,qg:minQueueGames(),lastPlayed:(S.matches||[]).length});
   sortByTier();
   el.value='';
@@ -1775,7 +1797,11 @@ function rememberQuad(ids){
 function pairFour(ids, st, str){
   const SPLITS = [[[0,1],[2,3]], [[0,2],[1,3]], [[0,3],[1,2]]];
   const Wp = 55 * (S.settings.partnerStrict / 3);
-  const Wb = .85 * (S.settings.balance / 3) * (isCompetitive() ? 1.5 : 1);
+  /* No warm-up. The first match of the night is played as evenly as the
+     last: a session has no run-up, and how competitive the games feel is the
+     host's choice of Same level or Social mix, not a timer. This is the old
+     "competitive" weight (.85 x 1.5), now simply the weight. */
+  const Wb = 1.275 * (S.settings.balance / 3);
   const n  = S.matches ? S.matches.length : 0;
 
   const teamCost = (x, y) => {
