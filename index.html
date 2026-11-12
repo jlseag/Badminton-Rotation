@@ -492,7 +492,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v59';   // bump together with V in sw.js
+const BUILD='v60';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -1411,6 +1411,8 @@ function viewPlayers(st){
       <button class="btn" onclick="rosterDialog()">Roster history${
         (S.roster||[]).length ? ` · ${(S.roster||[]).length}` : ''}</button>
     </div>
+    ${S.players.length ? `<button class="btn dan full" style="margin-top:10px"
+      onclick="clearLineup()">Clear tonight’s list · ${S.players.length}</button>` : ''}
   </div>
   <div class="sec-h">Skill order</div>
   <div class="muted" style="margin:-4px 4px 12px">Tap a name to rename, re-group or remove. The number is their overall rank \u2014
@@ -1843,6 +1845,28 @@ function rosterDialog(){
     <div style="max-height:52vh;overflow:auto;margin:0 -2px;padding:0 2px">${rows}</div>
     <button class="btn gho full" style="margin-top:14px" onclick="closeModal()">Close</button>`);
 }
+/* Empty tonight's list so a fresh one can be pasted over it. The ROSTER is
+   deliberately untouched: it is the thing that knows everybody's level and
+   place, so the new list arrives already sorted instead of as forty
+   strangers. Results go with the names, because a match that points at
+   people who are no longer on the roster counts nothing and shows nowhere. */
+function clearLineup(){
+  const n = S.players.length; if(!n) return;
+  const played = (S.matches||[]).length;
+  ask((played ? `The ${n} name${n===1?'':'s'} go, and tonight's ${played} match${played===1?'':'es'} with them. `
+              : `The ${n} name${n===1?'':'s'} go. `) +
+      'Your roster history is kept \u2014 everyone\'s level and place \u2014 so pasting ' +
+      'a new list brings them straight back sorted.',
+      'Clear the list',
+      () => {
+        clearResults();                 // courts, matches, quads, the panels
+        S.players = [];
+        S.started = false; S.ended = false;
+        render();
+        toast('List cleared \u2014 roster history kept');
+      });
+}
+
 /* Forgetting is for a name typed wrong, or somebody who has moved away. It
    only touches the memory; tonight's list is left alone. */
 function rosterForget(name){
