@@ -492,7 +492,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v61';   // bump together with V in sw.js
+const BUILD='v62';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -1854,11 +1854,12 @@ function rosterDialog(){
       <div class="tier-body">
         ${inTier.length ? inTier.map(r => {
           n++;
-          const on = here.has(rkey(r.name));
           return `<div class="pitem" data-id="${esc(rkey(r.name))}">
             <span class="pnum">${n}</span>
-            <span class="pname">${esc(r.name)}${on
+            <span class="pname">${esc(r.name)}${here.has(rkey(r.name))
               ? '<span class="tag g" style="margin-left:7px">here</span>' : ''}</span>
+            <button class="awaybtn go-away" title="Forget"
+              onclick="event.stopPropagation();rosterForget('${esc(r.name).replace(/'/g,"\\'")}')">Forget</button>
             <span class="grip" aria-label="Drag to reorder"><svg viewBox="0 0 24 24">
               <path d="M5 9h14M5 15h14"/></svg></span>
           </div>`;
@@ -1869,11 +1870,11 @@ function rosterDialog(){
   modal(`<h3 style="margin-bottom:4px">Roster history</h3>
     <div class="muted" style="margin-bottom:12px">${list.length} remembered,
       ${list.filter(r=>here.has(rkey(r.name))).length} here tonight. Drag the
-      <b>\u2261 handle</b> to re-rank or move someone between levels, or tap a name.
-      Whatever you set here is what they come back as.</div>
+      <b>\u2261 handle</b> to re-rank or to move somebody between levels. Whatever
+      you set here is what they come back as.</div>
     <div id="rlist">${groups}</div>
     <button class="btn gho full" style="margin-top:14px" onclick="closeModal()">Close</button>`);
-  wireDrag('#rlist', commitRoster, k => rosterSheet(k));
+  wireDrag('#rlist', commitRoster, () => {});
 }
 /* The sheet's DOM is the new truth, exactly as it is for the lineup. */
 function commitRoster(){
@@ -1894,46 +1895,15 @@ function commitRoster(){
   render();
   rosterDialog();
 }
-/* Tapping a name in the history: the same three things the lineup offers,
-   plus Back, because this sheet is where the host curates the order. */
-function rosterSheet(k){
-  const r = (S.roster||[]).find(x => rkey(x.name) === k);
-  if(!r) return;
-  const at = S.roster.indexOf(r) + 1;
-  const on = S.players.some(p => rkey(p.name) === k);
-  modal(`<h3 style="margin-bottom:4px">${esc(r.name)}</h3>
-    <div class="muted" style="margin-bottom:16px">${TIERS.find(t=>t[0]===(r.tier||'int'))[1]}
-      \u00b7 ${at} of ${S.roster.length}${on ? ' \u00b7 playing tonight' : ''}</div>
-    <div class="mini" style="margin-bottom:7px">Move to</div>
-    <div class="tierpick">${TIERS.map(([key,label]) =>
-      `<button data-tier="${key}" class="${(r.tier||'int')===key?'on':''}"
-         onclick="rosterTier('${esc(k)}','${key}')">${label}</button>`).join('')}</div>
-    <button class="btn full" style="margin-top:16px"
-      onclick="rosterRename('${esc(k)}')">Rename</button>
-    <button class="btn dan full" style="margin-top:10px"
-      onclick="rosterForget('${esc(r.name).replace(/'/g,"\\'")}')">Forget</button>
-    <button class="btn gho full" style="margin-top:10px" onclick="rosterDialog()">Back</button>`);
-}
-function rosterTier(k, tier){
-  const r = (S.roster||[]).find(x => rkey(x.name) === k);
-  if(!r) return;
-  r.tier = tier;
-  sortRoster();
-  const p = S.players.find(x => rkey(x.name) === k);
-  if(p){ p.tier = tier; sortByTier(); if(S.started) fillCourts(); }
-  render();
-  rosterDialog();
-}
-function rosterRename(k){
-  const r = (S.roster||[]).find(x => rkey(x.name) === k);
-  if(!r) return;
-  askText('Rename player', r.name, v => {
-    if(!v || !v.trim()) return;
-    const was = r.name; r.name = v.trim();
-    const p = S.players.find(x => rkey(x.name) === rkey(was));
-    if(p) p.name = r.name;
-    render(); rosterDialog();
-  });
+/* Forgetting is for a name typed wrong, or somebody who has moved away. It
+   only touches the memory; tonight's list is left alone. */
+function rosterForget(name){
+  ask("They come out of the roster history. Tonight's list is not changed, and if "+
+      "they turn up again they arrive as somebody new.",
+      'Forget ' + name, () => {
+        S.roster = (S.roster||[]).filter(r => rkey(r.name) !== rkey(name));
+        rosterDialog();
+      });
 }
 
 /* Empty tonight's list so a fresh one can be pasted over it. The ROSTER is
