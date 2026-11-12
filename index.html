@@ -27,6 +27,9 @@
   --line:#DBE8DC; --line2:#C6DCC9;
   --red:#E23B3B; --red-d:#B82A2A; --red-l:#FFECEC;
   --gold:#F2B705;
+  /* the highlight behind somebody who is in the hall tonight */
+  --hi:#D6F7E0; --hi-b:#8EDCA8; --hi-b2:#6FCB8F;
+  --aw:#FBC3C9; --aw-b:#EE8C96; --aw-b2:#E67683;
   --r:20px; --r-sm:14px; --tap:54px;
   /* skill tiers: a hue ramp, deliberately clear of the green/red/amber the UI
      already uses for good / danger / warning. Room for a 5th above Advanced. */
@@ -145,6 +148,7 @@ nav button.on{color:var(--court);background:rgba(14,138,79,.11)}
   display:flex;align-items:center;justify-content:center;color:var(--ink2);font-size:15px;font-weight:900}
 .ibtn.dan{color:var(--red);background:var(--red-l);border-color:#F3CECE}
 .handle{cursor:grab;color:var(--ink3);padding:0 2px;font-size:16px;letter-spacing:-2px}
+[data-tier=new]{--tc:#F2B705;--tcs:#FFF6D6;--tct:#7A5A00;--tcf:#3D2A00}
 [data-tier=adv]{--tc:#4A33C8;--tcs:#ECE9FC;--tct:#3A2BA8;--tcf:#fff}
 [data-tier=upp]{--tc:#2878D0;--tcs:#E4EEFB;--tct:#1F5CA0;--tcf:#fff}
 [data-tier=int]{--tc:#58C7EC;--tcs:#E4F6FD;--tct:#0A6E8C;--tcf:#05303F}
@@ -181,26 +185,21 @@ nav button.on{color:var(--court);background:rgba(14,138,79,.11)}
   font-size:10.5px;font-weight:900;letter-spacing:.09em;text-transform:uppercase;
   color:var(--ink3)}
 .qdiv::before,.qdiv::after{content:"";flex:1;height:2px;background:var(--line)}
-/* Away is a quiet state, not an alarm: the row settles back to a faint grey
-   and the name mutes with it. The skill colour is left alone -- the stripe
-   and the rank badge still say which group they are in, because that is what
-   the host is scanning for when she brings them back. */
-.isaway{background:#F0F3F0;border-color:#E2E7E2;border-bottom-color:#D5DCD6}
+/* Away reads off the row itself, in rose -- the counterpart to the mint used
+   for who is here in the roster history, one step up in saturation so the two
+   read as one system. No badge: the colour is the whole signal, which is why
+   the row keeps its full-strength name instead of muting. The skill colour is
+   left alone -- the stripe and the rank badge still say which group they are
+   in, because that is what the host is scanning for when she brings them back.
+   Only the Players list uses rose; the roster history stays white and mint. */
+.isaway{background:var(--aw);border-top-color:var(--aw-b);
+  border-right-color:var(--aw-b);border-bottom-color:var(--aw-b2)}
 /* Roster history: who is in the hall tonight, read off the row itself rather
    than from a badge. The tier stripe down the left keeps its colour in both,
    because the level is the other thing the host is scanning for. */
-.pitem.rhere{background:#E6F6EC;border-top-color:#B6DEC5;border-right-color:#B6DEC5;
-  border-bottom-color:#9CCEAF}
-.pitem.rgone{background:#F0F3F0;border-top-color:#E2E7E2;border-right-color:#E2E7E2;
-  border-bottom-color:#D5DCD6}
-.pitem.rgone .pname{color:var(--ink2)}
-.pitem.rgone .pnum{opacity:.72}
-.pitem.rgone .grip{color:#B4C0B6}
-.isaway .pname{color:var(--ink2)}
-.isaway .grip{color:#B4C0B6}
-.awaytag{margin-left:7px;font-size:10.5px;font-weight:900;letter-spacing:.06em;
-  text-transform:uppercase;color:var(--red-d);background:var(--red-l);
-  padding:2px 7px;border-radius:999px;vertical-align:1px}
+.pitem.rhere{background:var(--hi);border-top-color:var(--hi-b);
+  border-right-color:var(--hi-b);border-bottom-color:var(--hi-b2)}
+.isaway .grip{color:#C98E96}
 .awaybtn{flex:0 0 auto;touch-action:manipulation;font-size:11.5px;font-weight:800;
   border-radius:9px;padding:6px 10px;margin-right:4px;border:2px solid;
   min-width:64px;text-align:center}   /* Away and Back are the same size */
@@ -502,7 +501,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v63';   // bump together with V in sw.js
+const BUILD='v64';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -622,11 +621,15 @@ const teamName=t=>t.map(nameOf).join(' + ');
 const pk=(a,b)=>a<b?a+'|'+b:b+'|'+a;
 /* skill tiers — Advanced is strongest. The players array stays the single skill
    order; tier just groups it, and sorting by tier keeps the two in step. */
-const TIERS=[['adv','Advanced'],['upp','Upper Intermediate'],['int','Intermediate'],['beg','Beginner']];
+/* 'new' is a holding pen, not a skill. Anyone the app has never seen lands
+   there and stays until the host drags them to a real level; the group hides
+   itself the moment it is empty, so most nights it does not exist at all. */
+const TIERS=[['new','New players'],['adv','Advanced'],['upp','Upper Intermediate'],['int','Intermediate'],['beg','Beginner']];
+const REAL_TIERS = TIERS.filter(t => t[0] !== 'new');
 /* Abbreviations, used on a court card only when three or four groups share
    one court -- the full names would wrap to a second line there. */
-const TIER_SHORT={adv:'Adv',upp:'Upper',int:'Int',beg:'Beg'};
-const TIER_I=t=>{const i=TIERS.findIndex(x=>x[0]===t);return i<0?1:i};
+const TIER_SHORT={new:'New',adv:'Adv',upp:'Upper',int:'Int',beg:'Beg'};
+const TIER_I=t=>{const i=TIERS.findIndex(x=>x[0]===t);return i<0?TIERS.findIndex(x=>x[0]==='int'):i};
 const tierOf=p=>p&&TIERS.some(x=>x[0]===p.tier)?p.tier:'int';
 function sortByTier(){            // stable: order inside a tier is preserved
   S.players=S.players.map((p,i)=>({p,i}))
@@ -768,7 +771,7 @@ function activeCourts(){
    deepened; Advanced goes the other way and brightens. Intermediate also
    moves off cyan to teal, because at 16 degrees from Upper Intermediate's
    blue the two solid headers were impossible to tell apart down a list. */
-const HDR = {adv:'#7B5CFF', upp:'#2E90F5', int:'#0DA39B', beg:'#C8880A'};
+const HDR = {new:'#C8880A', adv:'#7B5CFF', upp:'#2E90F5', int:'#0DA39B', beg:'#C8880A'};
 const hdrShade = (hex, pct) => {
   const n = parseInt(hex.slice(1),16);
   const f = v => Math.max(0, Math.min(255, Math.round(v*(100+pct)/100)));
@@ -1391,6 +1394,8 @@ function tierList(){
   let n=0;
   const rows=TIERS.map(([key,label])=>{
     const inTier=S.players.filter(p=>tierOf(p)===key);
+    if(key==='new' && !inTier.length) return '';     // a holding pen with nobody in it
+
     return `<div class="tier" data-tier="${key}">
       <div class="tier-h"><span class="tier-n">${label}</span><span class="tier-c">${inTier.length}</span></div>
       <div class="tier-body">
@@ -1398,7 +1403,7 @@ function tierList(){
           n++;
           return `<div class="pitem ${p.away?'isaway':''}" data-id="${p.id}">
             <span class="pnum ${n===1?'s1':''}">${n}</span>
-            <span class="pname">${esc(p.name)}${p.away?'<span class="awaytag">away</span>':''}</span>
+            <span class="pname">${esc(p.name)}</span>
             <button class="awaybtn ${p.away?'go-back':'go-away'}" title="${p.away?'Bring back':'Mark away'}"
               onclick="event.stopPropagation();setAway('${p.id}',${p.away?'false':'true'})">${p.away?'Back':'Away'}</button>
             <span class="grip" aria-label="Drag to reorder"><svg viewBox="0 0 24 24">
@@ -1581,7 +1586,7 @@ function playerSheet(id){
   modal(`<h3 style="margin-bottom:4px">${esc(p.name)}</h3>
     <div class="muted" style="margin-bottom:16px">${TIERS.find(t=>t[0]===tierOf(p))[1]} \u00b7 rank ${S.players.indexOf(p)+1}</div>
     <div class="mini" style="margin-bottom:7px">Move to</div>
-    <div class="tierpick">${TIERS.map(([k,l])=>
+    <div class="tierpick">${REAL_TIERS.map(([k,l])=>
       `<button data-tier="${k}" class="${tierOf(p)===k?'on':''}" onclick="setTier('${id}','${k}')">${l}</button>`).join('')}</div>
     <button class="btn full" style="margin-top:16px" onclick="closeModal();renamePlayer('${id}')">Rename</button>
     <button class="btn dan full" style="margin-top:10px" onclick="closeModal();delPlayer('${id}')">Remove from session</button>
@@ -1731,7 +1736,7 @@ function addPlayer(){
      where the eye already is, one drag from anywhere. */
   const known = rosterGet(name);
   const entry = {id:uid(), name: known ? known.name : name,
-                 tier: known ? known.tier : 'adv', away:false,
+                 tier: known ? known.tier : 'new', away:false,
                  qg:minQueueGames(), lastPlayed:(S.matches||[]).length};
   if(known){
     const ord = S.roster.map(r=>rkey(r.name));
@@ -1739,7 +1744,7 @@ function addPlayer(){
     at < 0 ? S.players.push(entry) : S.players.splice(at, 0, entry);
   } else {
     S.players.unshift(entry);
-    rosterAdd(name, 'adv');
+    rosterAdd(name, 'new');
   }
   sortByTier(); rosterSync();
   el.value='';
@@ -1858,6 +1863,8 @@ function rosterDialog(){
   let n = 0;
   const groups = TIERS.map(([key,label]) => {
     const inTier = list.filter(r => (r.tier||'int') === key);
+    if(key==='new' && !inTier.length) return '';
+
     return `<div class="tier" data-tier="${key}">
       <div class="tier-h"><span class="tier-n">${label}</span>
         <span class="tier-c">${inTier.length}</span></div>
@@ -1955,7 +1962,6 @@ function pasteDialog(){
 }
 function pasteRead(v){ PASTE.text = v; PASTE.lists = parseRoster(v); PASTE.pick = 0; PASTE.drop = new Set(); renderPaste(); }
 function pastePick(i){ PASTE.pick = i; PASTE.drop = new Set(); renderPaste(); }
-function pasteTier(t){ PASTE.tier = t; renderPaste(); }
 function pasteDrop(n){ PASTE.drop.add(rkey(n)); renderPaste(); }
 function pasteNames(){
   const l = PASTE.lists[PASTE.pick];
@@ -1966,7 +1972,6 @@ function renderPaste(){
   const known = names.filter(n => rosterGet(n)), fresh = names.filter(n => !rosterGet(n));
   const already = names.filter(n => S.players.some(p => rkey(p.name) === rkey(n)));
   const asks = fresh.map(n => [n, nearMatch(n)]).filter(x => x[1]);
-  const tierName = TIERS.find(t => t[0] === PASTE.tier)[1];
   const chip = n => {
     const k = rosterGet(n);
     return `<span class="pill" style="padding:4px 6px 4px 10px;gap:4px;font-size:12.5px${
@@ -1996,11 +2001,10 @@ function renderPaste(){
              <span style="font-weight:800;font-size:11.5px;opacity:.75">${l.names.length} names</span>
            </button>`).join('')}</div>` : ''}
 
-      ${fresh.length ? `
-        <div class="mini" style="margin:16px 0 7px">${fresh.length} new to the app &mdash; they join as</div>
-        <div class="tierpick">${TIERS.map(([k,l])=>
-          `<button data-tier="${k}" class="${PASTE.tier===k?'on':''}"
-             onclick="pasteTier('${k}')">${l}</button>`).join('')}</div>` : ''}
+      ${fresh.length ? `<div class="note" style="margin-top:14px">
+        <b>${fresh.length}</b> name${fresh.length===1?' has':'s have'} never played here.
+        ${fresh.length===1?'It goes':'They go'} into <b>New players</b> at the top of the
+        list, for you to drag into a level.</div>` : ''}
 
       <div class="row" style="margin:16px 0 8px">
         <span class="mini"><b style="color:var(--ink)">${names.length} names</b></span>
@@ -2041,7 +2045,7 @@ function pasteApply(){
   /* New names go in at the top as ONE block, in the order they were pasted.
      Adding them one at a time would unshift each in turn and hand the host
      her list backwards -- the last name in the message arriving at number one. */
-  const fresh = names.filter(n => !rosterGet(n)).map(n => ({name:String(n).trim(), tier:PASTE.tier}));
+  const fresh = names.filter(n => !rosterGet(n)).map(n => ({name:String(n).trim(), tier:'new'}));
   if(fresh.length) S.roster = fresh.concat(S.roster || []);
   names.forEach(n => {
     if(S.players.some(p => rkey(p.name) === rkey(n))){ seen++; return; }
@@ -2478,7 +2482,7 @@ function chooseFour(order, st, str, justFinished){
 }
 
 
-const TIER_ORD = {adv:0, upp:1, int:2, beg:3};
+const TIER_ORD = {new:0, adv:1, upp:2, int:3, beg:4};
 const tierGap = ids => {
   const t = ids.map(id => TIER_ORD[tierOf(P(id))] ?? 2);
   return Math.max(...t) - Math.min(...t);
