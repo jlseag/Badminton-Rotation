@@ -492,7 +492,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v60';   // bump together with V in sw.js
+const BUILD='v61';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -1422,10 +1422,14 @@ function viewPlayers(st){
 
 /* ---- long-press drag: reorder players and move them between tiers ---- */
 let dragger=null;
-function wirePlayerDrag(){
-  const list=$('#plist'); if(!list)return;
+/* The same gesture now drives two lists: tonight's lineup on the Players tab
+   and the roster history in its sheet. They differ only in what a tap opens
+   and where the new order is written, so both travel with the drag. */
+function wirePlayerDrag(){ wireDrag('#plist', commitOrder, id => playerSheet(id)); }
+function wireDrag(sel, commit, tap){
+  const list=$(sel); if(!list)return;
   list.querySelectorAll('.pitem').forEach(el=>{
-    el.addEventListener('pointerdown',pdDown);
+    el.addEventListener('pointerdown',e=>pdDown(e,commit,tap));
     el.addEventListener('contextmenu',e=>e.preventDefault());
     const grip=el.querySelector('.grip');
     if(grip)grip.addEventListener('pointerdown',e=>{
@@ -1433,11 +1437,11 @@ function wirePlayerDrag(){
       if(e.button!==undefined&&e.button>0)return;
       e.preventDefault(); e.stopPropagation();
       try{grip.setPointerCapture(e.pointerId)}catch(_){}
-      startDrag(el,e.clientX,e.clientY,e.pointerId);
+      startDrag(el,e.clientX,e.clientY,e.pointerId,commit);
     });
   });
 }
-function pdDown(e){
+function pdDown(e,commit,tap){
   if(e.button!==undefined&&e.button>0)return;
   // The grip starts a drag; any BUTTON in the row is its own control and the
   // row must keep its hands off it. Without .awaybtn here a tap on Away either
@@ -1448,9 +1452,9 @@ function pdDown(e){
   if(e.target.closest('button'))return;
   const el=e.currentTarget, sx=e.clientX, sy=e.clientY;
   let moved=false;
-  const timer=setTimeout(()=>{if(!moved)startDrag(el,sx,sy,e.pointerId)},300);
+  const timer=setTimeout(()=>{if(!moved)startDrag(el,sx,sy,e.pointerId,commit)},300);
   const move=ev=>{if(Math.abs(ev.clientX-sx)>9||Math.abs(ev.clientY-sy)>9){moved=true;done()}};
-  const up=()=>{clearTimeout(timer);done();if(!moved&&!dragger)playerSheet(el.dataset.id)};
+  const up=()=>{clearTimeout(timer);done();if(!moved&&!dragger)(tap||playerSheet)(el.dataset.id)};
   function done(){clearTimeout(timer);
     el.removeEventListener('pointermove',move);el.removeEventListener('pointerup',up);
     el.removeEventListener('pointercancel',done);}
@@ -1458,7 +1462,7 @@ function pdDown(e){
   el.addEventListener('pointerup',up);
   el.addEventListener('pointercancel',done);
 }
-function startDrag(el,sx,sy,pid){
+function startDrag(el,sx,sy,pid,commit){
   const r=el.getBoundingClientRect();
   const ph=document.createElement('div');
   ph.className='pitem placeholder'; ph.style.height=r.height+'px';
@@ -1467,7 +1471,7 @@ function startDrag(el,sx,sy,pid){
   el.style.width=r.width+'px'; el.style.height=r.height+'px';
   el.style.left=r.left+'px'; el.style.top=r.top+'px';
   document.body.appendChild(el);
-  dragger={el,ph,dx:sx-r.left,dy:sy-r.top,x:sx,y:sy,dir:0,raf:null};
+  dragger={el,ph,dx:sx-r.left,dy:sy-r.top,x:sx,y:sy,dir:0,raf:null,commit:commit||commitOrder};
   try{if(navigator.vibrate)navigator.vibrate(12)}catch(_){}
   document.addEventListener('pointermove',dragMove,{passive:false});
   document.addEventListener('pointerup',dragEnd);
@@ -1500,18 +1504,33 @@ function updateDrop(){
   const body=under.closest('.tier-body');
   if(body&&!body.contains(ph))body.appendChild(ph);
 }
-/* the four groups are taller than a phone screen, so the page has to come to you */
+/* The four groups are taller than a phone screen, so the list has to come to
+   you. In the roster sheet the thing that scrolls is the sheet, not the page,
+   so find whichever box the row actually lives in. */
+function scrollHost(){
+  let n = dragger && dragger.ph && dragger.ph.parentNode;
+  while(n && n !== document.body){
+    const st = getComputedStyle(n);
+    if(/(auto|scroll)/.test(st.overflowY) && n.scrollHeight > n.clientHeight + 4) return n;
+    n = n.parentNode;
+  }
+  return null;                                  // null means the page itself
+}
 function autoScroll(){
   if(!dragger)return;
-  const edge=110, navH=80;
+  const edge=110, navH=80, host=scrollHost();
+  const top = host ? host.getBoundingClientRect().top : 0;
+  const bot = host ? host.getBoundingClientRect().bottom : innerHeight - navH;
   const y=dragger.y;
-  dragger.dir = y<edge ? -1 : y>innerHeight-edge-navH ? 1 : 0;
+  dragger.dir = y < top+edge ? -1 : y > bot-edge ? 1 : 0;
   if(dragger.dir&&!dragger.raf){
     const step=()=>{
       if(!dragger||!dragger.dir){if(dragger)dragger.raf=null;return}
-      const before=scrollY;
-      scrollBy(0,dragger.dir*11);
-      if(scrollY!==before)updateDrop();        // keep the drop target live while it moves
+      const h=scrollHost();
+      const before = h ? h.scrollTop : scrollY;
+      if(h) h.scrollTop += dragger.dir*11; else scrollBy(0,dragger.dir*11);
+      const after = h ? h.scrollTop : scrollY;
+      if(after!==before)updateDrop();        // keep the drop target live while it moves
       dragger.raf=requestAnimationFrame(step);
     };
     dragger.raf=requestAnimationFrame(step);
@@ -1529,8 +1548,9 @@ function dragEnd(){
   ph.remove();
   el.classList.remove('lifted');
   el.style.cssText='';
+  const commit=dragger.commit||commitOrder;
   dragger=null;
-  commitOrder();
+  commit();
 }
 function commitOrder(){          // the DOM is the new truth: read it back into state
   const order=[];
@@ -1825,26 +1845,97 @@ function rosterDialog(){
     return;
   }
   const here = new Set(S.players.map(p => rkey(p.name)));
-  const rows = list.map((r,i) => {
-    const t = r.tier || 'int', inTonight = here.has(rkey(r.name));
-    return `<div class="pitem" data-tier="${t}" style="border-left:7px solid var(--tc);
-        margin-bottom:8px;${inTonight ? '' : 'opacity:.6'}">
-      <span class="pnum" style="background:var(--tcs);color:var(--tct)">${i+1}</span>
-      <span class="pname">${esc(r.name)}</span>
-      <span class="mini" style="color:var(--tct);font-weight:900;white-space:nowrap">${TIER_SHORT[t]||t}</span>
-      ${inTonight ? '<span class="tag g" style="margin-left:6px">here</span>'
-        : `<button class="btn xs" style="margin-left:6px"
-             onclick="rosterForget('${esc(r.name).replace(/'/g,"\\'")}')">Forget</button>`}
+  let n = 0;
+  const groups = TIERS.map(([key,label]) => {
+    const inTier = list.filter(r => (r.tier||'int') === key);
+    return `<div class="tier" data-tier="${key}">
+      <div class="tier-h"><span class="tier-n">${label}</span>
+        <span class="tier-c">${inTier.length}</span></div>
+      <div class="tier-body">
+        ${inTier.length ? inTier.map(r => {
+          n++;
+          const on = here.has(rkey(r.name));
+          return `<div class="pitem" data-id="${esc(rkey(r.name))}">
+            <span class="pnum">${n}</span>
+            <span class="pname">${esc(r.name)}${on
+              ? '<span class="tag g" style="margin-left:7px">here</span>' : ''}</span>
+            <span class="grip" aria-label="Drag to reorder"><svg viewBox="0 0 24 24">
+              <path d="M5 9h14M5 15h14"/></svg></span>
+          </div>`;
+        }).join('') : '<div class="tier-empty">Drag someone here</div>'}
+      </div>
     </div>`;
   }).join('');
-  const n = list.length, hereN = list.filter(r => here.has(rkey(r.name))).length;
   modal(`<h3 style="margin-bottom:4px">Roster history</h3>
-    <div class="muted" style="margin-bottom:12px">${n} player${n===1?'':'s'} remembered,
-      ${hereN} here tonight. The number is their place in your order and the colour
-      is their level &mdash; both come back by themselves.</div>
-    <div style="max-height:52vh;overflow:auto;margin:0 -2px;padding:0 2px">${rows}</div>
+    <div class="muted" style="margin-bottom:12px">${list.length} remembered,
+      ${list.filter(r=>here.has(rkey(r.name))).length} here tonight. Drag the
+      <b>\u2261 handle</b> to re-rank or move someone between levels, or tap a name.
+      Whatever you set here is what they come back as.</div>
+    <div id="rlist">${groups}</div>
     <button class="btn gho full" style="margin-top:14px" onclick="closeModal()">Close</button>`);
+  wireDrag('#rlist', commitRoster, k => rosterSheet(k));
 }
+/* The sheet's DOM is the new truth, exactly as it is for the lineup. */
+function commitRoster(){
+  const next = [];
+  document.querySelectorAll('#rlist .tier').forEach(sec => {
+    const tier = sec.dataset.tier;
+    sec.querySelectorAll('.pitem:not(.placeholder)').forEach(el => {
+      const r = (S.roster||[]).find(x => rkey(x.name) === el.dataset.id);
+      if(r){ r.tier = tier; next.push(r); }
+    });
+  });
+  if(next.length === (S.roster||[]).length) S.roster = next;
+  /* Anyone in the hall tonight has to follow what she just decided, or the
+     next rosterSync() would quietly push the old level back over it. */
+  S.players.forEach(p => { const r = rosterGet(p.name); if(r) p.tier = r.tier; });
+  sortByTier();
+  if(S.started) fillCourts();
+  render();
+  rosterDialog();
+}
+/* Tapping a name in the history: the same three things the lineup offers,
+   plus Back, because this sheet is where the host curates the order. */
+function rosterSheet(k){
+  const r = (S.roster||[]).find(x => rkey(x.name) === k);
+  if(!r) return;
+  const at = S.roster.indexOf(r) + 1;
+  const on = S.players.some(p => rkey(p.name) === k);
+  modal(`<h3 style="margin-bottom:4px">${esc(r.name)}</h3>
+    <div class="muted" style="margin-bottom:16px">${TIERS.find(t=>t[0]===(r.tier||'int'))[1]}
+      \u00b7 ${at} of ${S.roster.length}${on ? ' \u00b7 playing tonight' : ''}</div>
+    <div class="mini" style="margin-bottom:7px">Move to</div>
+    <div class="tierpick">${TIERS.map(([key,label]) =>
+      `<button data-tier="${key}" class="${(r.tier||'int')===key?'on':''}"
+         onclick="rosterTier('${esc(k)}','${key}')">${label}</button>`).join('')}</div>
+    <button class="btn full" style="margin-top:16px"
+      onclick="rosterRename('${esc(k)}')">Rename</button>
+    <button class="btn dan full" style="margin-top:10px"
+      onclick="rosterForget('${esc(r.name).replace(/'/g,"\\'")}')">Forget</button>
+    <button class="btn gho full" style="margin-top:10px" onclick="rosterDialog()">Back</button>`);
+}
+function rosterTier(k, tier){
+  const r = (S.roster||[]).find(x => rkey(x.name) === k);
+  if(!r) return;
+  r.tier = tier;
+  sortRoster();
+  const p = S.players.find(x => rkey(x.name) === k);
+  if(p){ p.tier = tier; sortByTier(); if(S.started) fillCourts(); }
+  render();
+  rosterDialog();
+}
+function rosterRename(k){
+  const r = (S.roster||[]).find(x => rkey(x.name) === k);
+  if(!r) return;
+  askText('Rename player', r.name, v => {
+    if(!v || !v.trim()) return;
+    const was = r.name; r.name = v.trim();
+    const p = S.players.find(x => rkey(x.name) === rkey(was));
+    if(p) p.name = r.name;
+    render(); rosterDialog();
+  });
+}
+
 /* Empty tonight's list so a fresh one can be pasted over it. The ROSTER is
    deliberately untouched: it is the thing that knows everybody's level and
    place, so the new list arrives already sorted instead of as forty
@@ -1855,7 +1946,7 @@ function clearLineup(){
   const played = (S.matches||[]).length;
   ask((played ? `The ${n} name${n===1?'':'s'} go, and tonight's ${played} match${played===1?'':'es'} with them. `
               : `The ${n} name${n===1?'':'s'} go. `) +
-      'Your roster history is kept \u2014 everyone\'s level and place \u2014 so pasting ' +
+      "Your roster history is kept — everyone's level and place — so pasting " +
       'a new list brings them straight back sorted.',
       'Clear the list',
       () => {
@@ -1863,7 +1954,7 @@ function clearLineup(){
         S.players = [];
         S.started = false; S.ended = false;
         render();
-        toast('List cleared \u2014 roster history kept');
+        toast('List cleared — roster history kept');
       });
 }
 
