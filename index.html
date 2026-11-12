@@ -501,7 +501,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v64';   // bump together with V in sw.js
+const BUILD='v65';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -826,13 +826,30 @@ const ICONS={
 const TABS=[['game','Game','game'],['board','Leaderboard','board'],['players','Players','players'],
             ['history','History','history'],['settings','Settings','set']];
 
-function toast(msg,bad){
+/* `act` is an optional {label, fn} -- a single button inside the toast. It is
+   what makes a one-tap action safe to undo without a confirmation screen in
+   the way, so a toast carrying one stays up long enough to be read and
+   tapped. Toasts stack upwards rather than landing on top of each other,
+   because saving a result can raise two at once. */
+function toast(msg,bad,act){
+  const n=document.querySelectorAll('.toastmsg').length;
   const d=document.createElement('div');
-  d.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:96px;z-index:200;max-width:88%;'+
+  d.className='toastmsg';
+  d.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:'+(96+n*58)+'px;z-index:200;max-width:88%;'+
+    'display:flex;align-items:center;gap:12px;'+
     'background:'+(bad?'#4a1f22':'#173a25')+';color:'+(bad?'#ffb4b4':'#b9f5d2')+';border:1px solid '+(bad?'#7a3238':'#2b6a45')+
     ';padding:12px 16px;border-radius:12px;font-weight:700;font-size:14px;box-shadow:0 8px 30px rgba(0,0,0,.5)';
-  d.textContent=msg;document.body.appendChild(d);
-  setTimeout(()=>{d.style.transition='opacity .3s';d.style.opacity='0';setTimeout(()=>d.remove(),320)},1900);
+  const t=document.createElement('span'); t.textContent=msg; d.appendChild(t);
+  if(act){
+    const b=document.createElement('button');
+    b.textContent=act.label;
+    b.style.cssText='flex:none;font:inherit;font-weight:800;color:#b9f5d2;background:rgba(255,255,255,.1);'+
+      'border:1px solid #2b6a45;border-radius:9px;padding:6px 12px;cursor:pointer';
+    b.onclick=()=>{ d.remove(); act.fn(); };
+    d.appendChild(b);
+  }
+  document.body.appendChild(d);
+  setTimeout(()=>{d.style.transition='opacity .3s';d.style.opacity='0';setTimeout(()=>d.remove(),320)},act?5600:1900);
 }
 function modal(html){
   $('#modalRoot').innerHTML='<div class="modal" onclick="if(event.target===this)closeModal()"><div>'+html+'</div></div>';
@@ -965,21 +982,39 @@ function tapRolling(id){
   sel = null; render();
 }
 
+/* A pill in the "see all waiting" sheet. Closing first means the swap lands
+   on a visible court rather than behind the sheet; with nobody picked yet
+   this just selects them, and the note above the courts says what to do. */
+function tapQueued(id){
+  closeModal();
+  tapRolling(id);
+}
+
 /* The whole queue, in the same two-per-row pills as the card so twenty-two
-   people take eleven rows rather than twenty-two. View only -- swapping
-   still happens from the card. */
+   people take eleven rows rather than twenty-two.
+
+   These pills used to be plain <span>s -- view only, with swapping left to
+   the four shown on the card. A host reported that she could swap somebody
+   on court with any of the top four but with nobody further down, which is
+   exactly what that meant: the sheet listed twenty people and only ever let
+   her pick from four. Every pill is now a button into the same two-tap
+   gesture the card uses. */
 function queueDialog(){
   const st = stats(), queue = queueOrder(), away = S.players.filter(p => p.away);
   const pill = (id, n) => {
     const s = st[id] || {games:0};
-    return `<span class="pill qp"><i class="tdot" data-tier="${tierOf(P(id))}"></i>
+    return `<button class="pill qp ${sel===id?'sel':''}" data-pid="${id}"
+      style="${sel===id?'border-color:var(--court);background:rgba(14,138,79,.12)':''}"
+      onclick="tapQueued('${id}')"><i class="tdot" data-tier="${tierOf(P(id))}"></i>
       <b class="qn">${n}</b>${esc(nameOf(id))}
-      <span style="color:var(--ink3);font-size:11.5px;font-weight:800">${s.games||0} ${(s.games||0)===1?'game':'games'}</span></span>`;
+      <span style="color:var(--ink3);font-size:11.5px;font-weight:800">${s.games||0} ${(s.games||0)===1?'game':'games'}</span></button>`;
   };
   const next = queue.slice(0, 4).map((id,i) => pill(id, i+1)).join('');
   const rest = queue.slice(4).map((id,i) => pill(id, i+5)).join('');
   modal(`<h3 style="margin-bottom:4px">Waiting</h3>
-    <div class="muted" style="margin-bottom:14px">${queue.length} in the queue, in order.</div>
+    <div class="muted" style="margin-bottom:14px">${queue.length} in the queue, in order.${
+      sel ? ` Tap one to swap <b>${esc(nameOf(sel))}</b> with them.`
+          : ' Tap anyone to swap them onto a court.'}</div>
     <div class="qgrid">${next}</div>
     ${rest ? `<div class="qdiv"><span>next court</span></div><div class="qgrid">${rest}</div>` : ''}
     ${away.length ? `<div class="muted" style="margin-top:14px;opacity:.7">
@@ -1042,41 +1077,6 @@ function viewRolling(st){
       <div class="mini" style="margin-top:4px">${w?'WINNER':l?'':'Tap if they win'}</div></button>`;
   };
 
-  /* Court i is showing the result of match `idx`. The four underneath were
-     drawn the moment the result was saved, so they can be named here. */
-  const resultPanel = (idx, i) => {
-    const m = (S.matches || [])[idx];
-    if(!m) return null;
-    const w = m.winner === 'a' ? m.a : m.b, l = m.winner === 'a' ? m.b : m.a;
-    const scored = m.winScore != null && m.loseScore != null;
-    return `<div class="court saved">
-      <div class="court-h">
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor"
-          stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
-          style="flex:none"><path d="M4 12.5l5.5 5.5L20 7"/></svg>
-        <span class="cn">Court ${i+1} \u00b7 match saved</span>
-      </div>
-      <div class="court-b">
-        <div class="res-row w">
-          <div class="res-nm"><b>${esc(teamName(w))}</b><span class="res-tag">WINNER</span></div>
-          ${scored ? `<div class="res-sc">${m.winScore}</div>`
-            : `<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="var(--court-d)"
-                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
-                 style="flex:none"><path d="M7 4h10v5a5 5 0 01-10 0z"/><path d="M7 5H4v2a3 3 0 003 3"/>
-                 <path d="M17 5h3v2a3 3 0 01-3 3"/><path d="M9 20h6"/><path d="M12 14v6"/></svg>`}
-        </div>
-        <div class="res-row l">
-          <div class="res-nm"><b>${esc(teamName(l))}</b></div>
-          ${scored ? `<div class="res-sc">${m.loseScore}</div>` : ''}
-        </div>
-        ${queue.length >= 4
-          ? `<button class="btn pri full" style="margin-top:12px" onclick="nextTeams(${i})">Next teams</button>`
-          : `<div class="mini" style="text-transform:none;letter-spacing:0;text-align:center;padding:11px 4px 3px">
-              A court needs four free players.</div>`}
-      </div>
-    </div>`;
-  };
-
   /* A court the draw could not fill -- either fewer than four free, or the
      clique guard holding it so the groups mix. It keeps a card with a button
      so the host is never looking at an empty court she cannot act on. */
@@ -1121,9 +1121,10 @@ function viewRolling(st){
                <button class="btn pri" style="flex:1 1 auto;min-height:54px" onclick="beginResult(${i})">Finish match</button>
                <button class="btn gho" style="flex:0 0 auto;min-height:54px;padding:0 14px" onclick="reshuffleCourt(${i})">↻ Redraw</button>
              </div>`
-          : `${winsOnly()?'<div class="note" style="margin:0 0 4px">Tap the team that won.</div>':scoreUI(c,i)}
+          : `${winsOnly()?'':scoreUI(c,i)}
              <button class="btn pri full" style="margin-top:12px" onclick="finishMatch(${i})" ${ready?'':'disabled'}>
-               Save result${ready?'':(winsOnly()?' \u00b7 tap the winner':' \u00b7 pick a winner and score')}</button>
+               ${ready ? 'Next teams'
+                       : (winsOnly() ? 'Tap the winner' : 'Pick a winner and score')}</button>
              <button class="btn gho full" style="margin-top:8px" onclick="cancelResult(${i})">← Back</button>`}
       </div>
     </div>`;
@@ -1179,7 +1180,7 @@ function viewRolling(st){
       .map(i => {
         const ps = savedPanel[i];
         if(ps && ps.held) return heldCard(i);
-        return (ps && resultPanel(ps.idx, i)) || courtCard((S.courts||[])[i], i);
+        return courtCard((S.courts||[])[i], i);
       }).join('')}
 
   ${endBtn()}`;
@@ -2585,23 +2586,32 @@ function finishMatch(i){
   });
 
   S.courts[i] = null;
-  // The next four are NOT drawn yet. v52 drew them here and covered them with
-  // the panel, which made waiting pointless: the four were already sealed
-  // before the host could decide anything. Drawing on her tap is what lets
-  // her hold the court until another finishes -- and when two courts are free
-  // at once they are drawn TOGETHER, which is where the gain actually is.
-  // Measured over 12 seeds x 60 finishes, holding and drawing both courts
-  // raised the number of different people the least-mixed player met from
-  // 6.4 to 9.8 at 16 players on 3 courts, and from 4.3 to 11.9 at 24 on 4.
-  savedPanel[i] = { idx: S.matches.length - 1, played, held: false };
   sel = null;
-  /* With a single court there is never a second one to draw alongside, so the
-     pause has nothing to offer and costs playing time. Measured at 9 players
-     on 1 court: a host who does not tap the moment she saves finished 48
-     matches instead of 60, with 21% of court time standing empty. Draw at
-     once and let her get on with it. */
-  if(activeCourts() <= 1){ nextTeams(i); toast('Match saved'); return; }
-  render();
+
+  /* Saving and drawing are ONE tap. Until v65 this set a panel instead and
+     waited for a second tap on "Next teams", so that two courts finishing
+     close together could be drawn from one pool -- worth 6.4 to 9.8 different
+     opponents for the least-mixed player at 16 players on 3 courts. The host
+     asked for the panel to go: three screens to record one match is too many
+     when she is doing it sixty times a night, and the single-court case was
+     already drawing at once for the same reason. nextTeams() still sweeps in
+     every court standing free, so two genuinely simultaneous finishes are
+     still drawn together; what is lost is the deliberate pause, not the
+     joint draw itself.
+
+     The panel entry is still WRITTEN, and nextTeams deletes it on the way
+     through: `played` is how the four who just finished are handed to the
+     draw as just-finished, and dropping it put them straight back on court
+     over people still waiting -- the original "2 orang baru main langsung
+     disuruh main lagi" bug. The entry now lives for one function call and is
+     never rendered.
+
+     Nothing is confirmed any more, so the toast carries the undo. */
+  const idx = S.matches.length - 1;
+  const won = teamName(c.winner === 'a' ? c.a : c.b);
+  savedPanel[i] = { idx, played, held: false };
+  nextTeams(i);
+  toast(won + ' won', 0, { label:'Undo', fn:() => undoMatch(idx, i) });
 }
 
 /* Draw this court now -- together with every court the host is holding, from
@@ -2739,27 +2749,34 @@ function drawCourts(idxs, justFinished){
   for(let k = 2; k < list.length; k++) fillCourt(list[k], justFinished);
 }
 
-/* Undo the match this panel is showing -- not merely the newest one, since
-   another court may have finished since. The four go back into the queue and
-   the court is drawn again. */
-function undoSavedMatch(i){
-  const ps = savedPanel[i], ms = S.matches || [];
-  const idx = (ps && ps.idx != null) ? ps.idx : -1;
+/* Undo one saved match, by index -- not merely the newest one, since another
+   court may have finished in between. Reached from the toast that appears on
+   save, which is the only chance to take back a mis-tap now that the result
+   panel is gone; afterwards the match is editable from History as before.
+
+   The four who played go back ON to the court, exactly as they were. The four
+   the draw has just put there were never recorded as having played -- qg is
+   only touched here, on save -- so dropping them costs nothing but the draw,
+   and the host sees the match she is undoing rather than a fresh set of
+   strangers. */
+function undoMatch(idx, i){
+  const ms = S.matches || [];
   const m = ms[idx];
-  if(!m){ delete savedPanel[i]; render(); return; }
-  ask('The four who played it go back into the queue and the court is drawn again.',
-      'Undo this match', () => {
-    ms.splice(idx, 1);
-    [...m.a, ...m.b].forEach(id => { const p = P(id); if(p && p.qg) p.qg--; });
-    // every other panel pointing past the removed match shifts down with it
-    Object.keys(savedPanel).forEach(k => {
-      if(savedPanel[k].idx === idx) delete savedPanel[k];
-      else if(savedPanel[k].idx > idx) savedPanel[k].idx--;
-    });
-    S.courts[i] = null;
-    fillCourt(i);                    // no longer pending: draw it straight away
-    render(); toast('Match removed');
+  if(!m){ toast('That match is already gone', 1); return; }
+  ms.splice(idx, 1);
+  [...m.a, ...m.b].forEach(id => {
+    const p = P(id);
+    if(p){ if(p.qg) p.qg--; p.lastPlayed = Math.min(p.lastPlayed || 0, ms.length); }
   });
+  // every panel pointing past the removed match shifts down with it
+  Object.keys(savedPanel).forEach(k => {
+    if(savedPanel[k].idx === idx) delete savedPanel[k];
+    else if(savedPanel[k].idx > idx) savedPanel[k].idx--;
+  });
+  delete savedPanel[i];
+  S.courts[i] = { a:[...m.a], b:[...m.b], winner:null, entering:false };
+  sel = null;
+  save(); render(); toast('Match undone');
 }
 
 /* Away. The host decides; the system simply stops picking them.
