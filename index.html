@@ -517,7 +517,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v66';   // bump together with V in sw.js
+const BUILD='v67';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -787,7 +787,16 @@ function activeCourts(){
    deepened; Advanced goes the other way and brightens. Intermediate also
    moves off cyan to teal, because at 16 degrees from Upper Intermediate's
    blue the two solid headers were impossible to tell apart down a list. */
-const HDR = {new:'#C8880A', adv:'#7B5CFF', upp:'#2E90F5', int:'#0DA39B', beg:'#C8880A'};
+/* The header palette, separate from the tier colours because a header is a
+   full-width block carrying white text while a tier colour is a dot on
+   white. Intermediate was teal #0DA39B, chosen to hold white text and to
+   sit well clear of Upper Intermediate's blue. The host picked the tier's
+   own light blue instead -- she wants the header to say the level, and a
+   court is read with the names right underneath it, not from across the
+   hall. Two knock-ons, accepted: white on #58C7EC is 1.95:1, so the small
+   subtitle is soft; and an Upper + Intermediate court is now two blues
+   rather than blue against teal. */
+const HDR = {new:'#C8880A', adv:'#7B5CFF', upp:'#2E90F5', int:'#58C7EC', beg:'#C8880A'};
 const hdrShade = (hex, pct) => {
   const n = parseInt(hex.slice(1),16);
   const f = v => Math.max(0, Math.min(255, Math.round(v*(100+pct)/100)));
