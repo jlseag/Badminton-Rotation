@@ -2,3 +2,24 @@
 .vscode/
 node_modules/
 *.log
+
+# ── Nothing below here may ever be committed ────────────────────────────
+# Cloudflare Pages serves this repo's ROOT as the public website, so every
+# committed file is a public URL. Until v67 the admin dashboard, the edge
+# function source, the full schema with its RLS policies and an old session
+# export full of real player names were all reachable on mabyo.pages.dev by
+# anyone who guessed the path. No keys were in them, but it was a map of the
+# access-control design handed out for free.
+#
+# The admin tool now lives in ../Badminton Admin, outside this repo. These
+# patterns stop it, or anything like it, walking back in.
+Badminton Admin/
+admin.html
+*.sql
+edge-function-*.ts
+ACCESS_BLUEPRINT.md
+Badminton-Rotation.json
+
+# Screenshots and scratch files dropped in the folder while working
+*.png
+!icon.png
