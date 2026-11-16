@@ -164,11 +164,21 @@ nav button.on{color:var(--court);background:rgba(14,138,79,.11)}
   display:flex;align-items:center;justify-content:center;color:var(--ink2);font-size:15px;font-weight:900}
 .ibtn.dan{color:var(--red);background:var(--red-l);border-color:#F3CECE}
 .handle{cursor:grab;color:var(--ink3);padding:0 2px;font-size:16px;letter-spacing:-2px}
-[data-tier=new]{--tc:#F2B705;--tcs:#FFF6D6;--tct:#7A5A00;--tcf:#3D2A00}
+/* New players is NOT a rank -- it is the holding pen for names nobody has
+   judged yet, so it is the one group with no colour of its own. It used to
+   be bright yellow, which read as a level and, in the header palette, was
+   the very same gold as Beginner: an all-newcomer court and an all-beginner
+   court looked identical. Grey says "not judged" and gives the yellow to
+   Newbie, where it belongs. */
+[data-tier=new]{--tc:#9AA7AE;--tcs:#EEF1F3;--tct:#49565E;--tcf:#fff}
 [data-tier=adv]{--tc:#4A33C8;--tcs:#ECE9FC;--tct:#3A2BA8;--tcf:#fff}
 [data-tier=upp]{--tc:#2878D0;--tcs:#E4EEFB;--tct:#1F5CA0;--tcf:#fff}
 [data-tier=int]{--tc:#58C7EC;--tcs:#E4F6FD;--tct:#0A6E8C;--tcf:#05303F}
 [data-tier=beg]{--tc:#E8A00B;--tcs:#FCF0D6;--tct:#8A5B00;--tcf:#3D2A00}
+/* Newbie sits directly under Beginner in the list, so those two are the
+   pair the host reads against each other all evening. #FFE500 is a true
+   yellow rather than a lighter gold, which is what keeps them apart. */
+[data-tier=nwb]{--tc:#FFE500;--tcs:#FFFBD1;--tct:#6E5A00;--tcf:#3D3200}
 .tier .tier-n{color:var(--tct)}
 .tier .tier-c{background:var(--tc);color:var(--tcf)}
 .tier .pitem{border-left:7px solid var(--tc)}
@@ -517,7 +527,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v67';   // bump together with V in sw.js
+const BUILD='v68';   // bump together with V in sw.js
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -640,11 +650,11 @@ const pk=(a,b)=>a<b?a+'|'+b:b+'|'+a;
 /* 'new' is a holding pen, not a skill. Anyone the app has never seen lands
    there and stays until the host drags them to a real level; the group hides
    itself the moment it is empty, so most nights it does not exist at all. */
-const TIERS=[['new','New players'],['adv','Advanced'],['upp','Upper Intermediate'],['int','Intermediate'],['beg','Beginner']];
+const TIERS=[['new','New players'],['adv','Advanced'],['upp','Upper Intermediate'],['int','Intermediate'],['beg','Beginner'],['nwb','Newbie']];
 const REAL_TIERS = TIERS.filter(t => t[0] !== 'new');
 /* Abbreviations, used on a court card only when three or four groups share
    one court -- the full names would wrap to a second line there. */
-const TIER_SHORT={new:'New',adv:'Adv',upp:'Upper',int:'Int',beg:'Beg'};
+const TIER_SHORT={new:'New',adv:'Adv',upp:'Upper',int:'Int',beg:'Beg',nwb:'Newbie'};
 const TIER_I=t=>{const i=TIERS.findIndex(x=>x[0]===t);return i<0?TIERS.findIndex(x=>x[0]==='int'):i};
 const tierOf=p=>p&&TIERS.some(x=>x[0]===p.tier)?p.tier:'int';
 function sortByTier(){            // stable: order inside a tier is preserved
@@ -796,7 +806,16 @@ function activeCourts(){
    hall. Two knock-ons, accepted: white on #58C7EC is 1.95:1, so the small
    subtitle is soft; and an Upper + Intermediate court is now two blues
    rather than blue against teal. */
-const HDR = {new:'#C8880A', adv:'#7B5CFF', upp:'#2E90F5', int:'#58C7EC', beg:'#C8880A'};
+/* Header colours, deliberately NOT identical to the tier colours. A header
+   is a wide block carrying white text, and one bar can span two levels, so
+   every value here has to hold white on its own AND beside its neighbours.
+   Newbie's #FFE500 cannot -- white on it is 1.28:1 -- and a Beginner+Newbie
+   court put the balance badge on the yellow half where it disappeared.
+   #D6BC00 is the same yellow carried to the luminance Intermediate already
+   sits at: 1.90:1 against white, versus Intermediate's 1.95:1. That is the
+   standard the host set when she chose the light blue in v67, and matching
+   it means one ink works on every header instead of two that fight. */
+const HDR = {new:'#9AA7AE', adv:'#7B5CFF', upp:'#2E90F5', int:'#58C7EC', beg:'#C8880A', nwb:'#D6BC00'};
 const hdrShade = (hex, pct) => {
   const n = parseInt(hex.slice(1),16);
   const f = v => Math.max(0, Math.min(255, Math.round(v*(100+pct)/100)));
@@ -816,6 +835,11 @@ function courtColours(c){
   if(present.length === 2) return present;
   return [present[0], present[present.length-1]];
 }
+/* Every HDR value is dark enough for white text, so the header never has to
+   switch ink. An earlier v68 draft did switch, and a Beginner+Newbie court
+   showed why that cannot work: one bar spanning dark orange and bright
+   yellow has no single ink that reads on both ends. Fixing the palette is
+   the fix; fixing the ink is not. */
 function courtHeadStyle(c){
   if(!c || S.settings.pairing !== 'level') return '';
   const ks = courtColours(c), a = HDR[ks[0]], b = HDR[ks[ks.length-1]];
@@ -2508,7 +2532,11 @@ function chooseFour(order, st, str, justFinished){
 }
 
 
-const TIER_ORD = {new:0, adv:1, upp:2, int:3, beg:4};
+/* The skill ladder as a number, for tierGap. New players sits at the TOP
+   only because it is where the group is drawn; it is not a level, and a
+   court of four unjudged people is a gap of 0 like any other single group.
+   Newbie extends the bottom, so the widest real gap is now 5, not 4. */
+const TIER_ORD = {new:0, adv:1, upp:2, int:3, beg:4, nwb:5};
 const tierGap = ids => {
   const t = ids.map(id => TIER_ORD[tierOf(P(id))] ?? 2);
   return Math.max(...t) - Math.min(...t);
