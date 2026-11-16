@@ -4,15 +4,15 @@
 # lives outside the repo, and .gitignore stops it coming back; these rules are
 # the second lock, so an old bookmark or a stray copy lands on the app instead
 # of on a file nobody outside should read.
-/Badminton%20Admin/*   /   301
-/Badminton Admin/*     /   301
-/admin.html            /   301
-/schema.sql            /   301
-/schema_admin.sql      /   301
-/Badminton-Rotation.json  /  301
-
-# Precedence probe, v67: README.md is still committed. If requesting it
-# redirects, these rules beat a real file and are genuine protection. If it
-# still serves the markdown, Pages prefers static assets and the only real
-# guard is keeping the files out of the repo. Checked on deploy; see commit.
-/README.md             /   301
+#
+# Measured on the v67 deploy, not assumed: a rule here BEATS a real file.
+# README.md was committed and carried a rule -- it redirected. manifest.json,
+# icon.png and Mabyo-Host-Guide.pdf were committed with no rule -- they served
+# normally. So these lines still hold even if one of these files reappears in
+# the repo, which is exactly the failure they are here to catch.
+/Badminton%20Admin/*      /   301
+/Badminton Admin/*        /   301
+/admin.html               /   301
+/schema.sql               /   301
+/schema_admin.sql         /   301
+/Badminton-Rotation.json  /   301
