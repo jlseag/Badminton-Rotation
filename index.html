@@ -144,6 +144,7 @@ nav button.on{color:var(--court);background:rgba(14,138,79,.11)}
 .tag.y{background:#FFF0C9;color:#7A5A00}
 .tag.r{background:var(--red-l);color:var(--red-d)}
 .tag.b{background:#E2F2E7;color:var(--court-d)}
+.tag.ver.preview{background:#F2B705;color:#3D2A00;border-color:#C8880A}
 .tag.ver{background:rgba(255,255,255,.22);color:#fff;border:1.5px solid rgba(255,255,255,.45);
   letter-spacing:.4px;text-transform:none}
 .note{background:#FFF8E4;border:2px solid #F3DFA6;color:#7A5A00;
@@ -528,6 +529,22 @@ html.gated body{padding-bottom:0}
    ========================================================================= */
 const LS='badminton_rotation_v1';
 const BUILD='v68';   // bump together with V in sw.js
+/* The live site, and nothing else. A preview branch, a local server and a
+   file:// copy are all "not live" and say so in the header. Hard-coded
+   rather than configured: a flag you can set wrongly is worse than none. */
+const IS_LIVE = location.hostname === 'mabyo.pages.dev';
+/* A preview branch is a public URL serving a complete, working copy of the
+   app. Nothing extra is exposed by it -- same anon key, same RLS, the
+   server-side rules are what actually guard the data -- but it should not
+   be findable. Anyone who ends up on a preview by accident is somebody who
+   might run a real night on untested code. */
+if(!IS_LIVE){
+  try{
+    const m = document.createElement('meta');
+    m.name = 'robots'; m.content = 'noindex, nofollow';
+    document.head.appendChild(m);
+  }catch(_){}
+}
 const $=(s,r)=>(r||document).querySelector(s);
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
@@ -946,8 +963,14 @@ function render(){
       `${present().length} player${present().length===1?'':'s'} · ${activeCourts()||'no'} court${activeCourts()===1?'':'s'} · ${done}`;
   /* The build, on every screen. Hosts send screenshots when something looks
      wrong, and the first thing worth knowing is whether they are on the
-     version the fix went into. */
-  $('#hRight').innerHTML = `<span class="tag ver">${BUILD}</span>`;
+     version the fix went into.
+
+     On anything that is not the live site the chip turns amber and says so.
+     Testing happens on a phone, on a preview URL that looks exactly like
+     the real app, and the one mistake that costs a whole evening is running
+     a real mabar on a build that was never meant for anyone. */
+  $('#hRight').innerHTML = `<span class="tag ver${IS_LIVE ? '' : ' preview'}">${
+      BUILD}${IS_LIVE ? '' : ' \u00b7 DEV'}</span>`;
   wire();
   save();
 }
