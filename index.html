@@ -467,6 +467,10 @@ html.gated body{padding-bottom:0}
   background:var(--ground);border:none;color:var(--ink2);font:inherit;font-size:12px;
   font-weight:800;letter-spacing:.05em;padding:9px 11px;border-radius:9px;cursor:pointer}
 #gEye:active{background:var(--line)}
+/* 35px tall reads right beside a 44px field, but a thumb needs 44. Grown
+   downward and upward only: the field's padding-right already keeps the two
+   apart sideways, and reaching sideways would steal taps from the input. */
+#gEye::after{content:"";position:absolute;left:0;right:0;top:-5px;bottom:-5px}
 #gBtn{width:100%;font:inherit;font-size:16px;font-weight:800;color:#fff;
   background:var(--court);border:none;border-radius:var(--r-sm);
   min-height:var(--tap);margin-top:7px;cursor:pointer;
@@ -528,7 +532,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v68';   // bump together with V in sw.js
+const BUILD='v69';   // bump together with V in sw.js
 /* The live site, and nothing else. A preview branch, a local server and a
    file:// copy are all "not live" and say so in the header. Hard-coded
    rather than configured: a flag you can set wrongly is worse than none. */
