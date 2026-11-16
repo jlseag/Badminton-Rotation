@@ -1,0 +1,139 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Guide shot</title>
+<!--
+  One guide screenshot, chosen by ?scene=NAME.
+
+  The app is loaded in a same-origin iframe rather than copied, so a shot
+  can never drift from what shipped: it IS the shipped file. The harness
+  reaches in, seeds a roster, drives the app to the screen we want, and
+  then reports ready. Headless Chrome waits for that flag before capturing.
+
+  WHY EVERYTHING GOES THROUGH w.eval()
+
+  The app declares its state with `let S=defState(), tab='game', ...` at
+  the top level of its script. A top-level `let` lives in the global
+  LEXICAL environment, which is not the window object -- so `w.S = ...`
+  from out here quietly creates a second, unrelated `window.S` and the app
+  never sees it. The first batch of shots looked seeded in a browser that
+  happened to have a saved session in localStorage, and came out identical
+  in a clean headless profile, because nothing had been seeded at all.
+
+  Code passed to w.eval() runs in the iframe's global scope, where `S` and
+  `tab` resolve to the real bindings. So the whole scene script is built as
+  a string and evaluated there.
+
+  Names are real-looking Indonesian names, not "Player 1". A guide whose
+  screenshots are obviously fake teaches the reader that the guide is fake.
+-->
+<style>
+  html,body{margin:0;padding:0;background:#fff}
+  iframe{display:block;width:390px;height:844px;border:0}
+</style>
+<iframe id="f" src="/index.html"></iframe>
+<script>
+const SCENE = new URLSearchParams(location.search).get('scene') || 'game';
+const NAMES = [
+  ['Budi Santoso','adv'],   ['Andi Wijaya','adv'],    ['Rizky Pratama','adv'],
+  ['Dewi Lestari','upp'],   ['Agus Setiawan','upp'],  ['Siti Rahayu','upp'],
+  ['Eko Nugroho','upp'],    ['Putri Maharani','upp'],
+  ['Hendra Gunawan','int'], ['Rina Kusuma','int'],    ['Joko Susilo','int'],
+  ['Maya Sari','int'],      ['Bambang Hartono','int'],['Lina Permata','int'],
+  ['Dimas Aditya','int'],   ['Fitri Handayani','int'],['Yusuf Ramadhan','int'],
+  ['Nisa Amelia','int'],    ['Taufik Hidayat','int'], ['Sari Wulandari','int'],
+  ['Arif Rahman','beg'],    ['Mega Puspita','beg'],   ['Danu Prasetyo','beg'],
+  ['Indah Permatasari','beg'],['Galih Saputra','beg'],['Ayu Kartika','beg'],
+  ['Reza Fahlevi','nwb'],   ['Nadia Safira','nwb'],   ['Bayu Firmansyah','nwb'],
+  ['Citra Dewanti','nwb']
+];
+
+/* Every scene as source text, evaluated inside the app. seed() and play()
+   are defined in the same eval so they share the app's bindings. */
+const SCENES = {
+  empty:    "seed(0,{notStarted:true}); go('game');",
+  paste:    "seed(0,{notStarted:true}); go('players'); pasteDialog();",
+  players:  "seed(30); go('players');",
+  away:     "seed(30); S.players[4].away=true; S.players[9].away=true; go('players');",
+  roster:   "seed(30); go('players'); rosterDialog();",
+  game:     "seed(24); go('game');",
+  result:   "seed(24); go('game'); beginResult(0);",
+  points:   "seed(24,{scoring:'points'}); go('game'); beginResult(0);",
+  swap:     "seed(24); go('game'); tapRolling(S.courts[0].a[0]);",
+  waiting:  "seed(24); go('game'); tapRolling(S.courts[0].a[0]); queueDialog();",
+  board:    "seed(24); play(12); go('board');",
+  history:  "seed(24); play(12); go('history');",
+  settings: "seed(24); go('settings');"
+};
+
+const PRELUDE = `
+  var __N = ${JSON.stringify(NAMES)};
+  function seed(n, opts){
+    opts = opts || {};
+    S = defState();
+    Object.assign(S.settings, {
+      courts: opts.courts || 3, pairing:'level',
+      scoring: opts.scoring || 'wins', mode:'firstto', total:21 });
+    S.players = []; S.roster = [];
+    __N.slice(0, n).forEach(function(p, i){
+      S.players.push({ id:'p'+i, name:p[0], tier:p[1], away:false, qg:0, lastPlayed:0 });
+      S.roster.push({ name:p[0], tier:p[1] });
+    });
+    sortByTier();
+    S.started = !opts.notStarted;
+    S.courts = []; S.matches = []; S.recentQuads = {};
+    savedPanel = {}; sel = null;
+    if(S.started) fillCourts();
+  }
+  function play(rounds){
+    for(var k = 0; k < rounds; k++){
+      var i = S.courts.findIndex(function(c){ return c });
+      if(i < 0) break;
+      S.courts[i].winner = (k % 2) ? 'b' : 'a';
+      finishMatch(i);
+    }
+  }
+  try{ closeModal(); }catch(e){}
+`;
+
+function ready(){ document.title = 'READY'; document.documentElement.dataset.ready = '1'; }
+
+document.getElementById('f').addEventListener('load', () => {
+  const w = document.getElementById('f').contentWindow;
+  const d = w.document;
+
+  const open = () => {
+    /* setGate() does two things -- the html class AND gate.hidden -- and
+       doing only one leaves the sign-in card painted over a perfectly
+       working app. The app also re-gates itself when its access check
+       finds no session, so this is held open until the capture. It hides
+       the sign-in panel of a localhost build; it is not a way into data. */
+    d.documentElement.classList.remove('gated');
+    const g = d.querySelector('#gate'); if(g) g.hidden = true;
+    const a = d.querySelector('#acctBtn'); if(a) a.hidden = false;
+  };
+  const hold = setInterval(open, 100);
+  open();
+
+  setTimeout(() => {
+    try{
+      w.eval(PRELUDE + (SCENES[SCENE] || SCENES.game));
+    }catch(e){
+      document.title = 'ERROR: ' + e.message;
+      d.body.innerHTML = '<pre style="padding:16px;font:12px monospace;color:#b00">'
+        + 'scene ' + SCENE + '\n' + e.message + '</pre>';
+      return;
+    }
+    open();
+    /* The build chip goes amber and says DEV on anything that is not the
+       live host, which is correct for testing and wrong for a guide: the
+       reader is being shown the real app. Put it back to how it ships. */
+    try{
+      const r = d.querySelector('#hRight');
+      if(r) r.innerHTML = '<span class="tag ver">' + w.eval('BUILD') + '</span>';
+    }catch(_){}
+    setTimeout(ready, 700);
+  }, 1400);
+
+  setTimeout(() => clearInterval(hold), 9000);
+});
+</script>
