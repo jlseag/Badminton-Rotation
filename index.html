@@ -3157,6 +3157,22 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
     // times a minute should not write twenty rows.
     if(Date.now() - lastTouch < 50000) return;
     lastTouch = Date.now();
+
+    /* A preview build must not leave a footprint in the live data.
+       deviceKey() is a random id in localStorage, and localStorage is per
+       ORIGIN, so dev.mabyo.pages.dev invents a brand new device id for a
+       machine that is already registered from mabyo.pages.dev. Both wrote
+       to the same production table, and the dashboard -- which has no way
+       of knowing which site a row came from -- showed one MacBook twice and
+       warned that the account was being shared. With a device cap in place
+       that same testing would have spent both of the owner's slots.
+
+       So a non-live build reads its access but never writes. checkAccess()
+       still runs and a revoked device is still locked out; nothing is
+       recorded. This comes out the day dev gets its own Supabase project,
+       at which point dev should register normally against dev's database. */
+    if(!IS_LIVE) return;
+
     const now = new Date().toISOString();
     try{
       const dr = await sbFetch('/rest/v1/devices?on_conflict=host_id,device_key', {
