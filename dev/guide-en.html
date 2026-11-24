@@ -1,0 +1,597 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Mabyo Host Guide</title>
+<!--
+  Source for Mabyo-Host-Guide.pdf. Render with dev/guide-build.sh.
+
+  Every screenshot comes from dev/shots/, captured by dev/guide-capture.sh
+  from the SHIPPED index.html. Nothing here is drawn by hand or edited, so
+  a page cannot show a version of the app that was never released. The
+  previous guide drifted five versions behind and spent a whole page
+  explaining a setting that had been deleted.
+-->
+<link rel="stylesheet" href="guide-font.css">
+<style>
+  @page { size: A4 portrait; margin: 0 }
+
+  :root{
+    --court:#0E8A4F; --court-d:#0A6B3C; --ground:#F1F7F0; --card:#fff;
+    --ink:#0F2419; --ink2:#4A6553; --line:#DBE8DC;
+    --adv:#7B5CFF; --upp:#2E90F5; --int:#58C7EC; --beg:#C8880A; --nwb:#D6BC00;
+    --new:#9AA7AE; --rose:#FBC3C9; --rose-d:#9B2C3A; --mint:#D6F7E0;
+  }
+  *{ box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact }
+  html,body{ margin:0; padding:0 }
+  body{
+    font-family:'Fredoka', ui-rounded, system-ui, sans-serif;
+    color:var(--ink); background:#fff; font-size:10.5pt; line-height:1.5;
+  }
+
+  .page{
+    position:relative; width:210mm; height:297mm; overflow:hidden;
+    page-break-after:always; background:#fff;
+    padding:18mm 16mm 14mm;
+  }
+  .page:last-child{ page-break-after:auto }
+
+  /* ── running head ─────────────────────────────────────────────── */
+  .rh{
+    position:absolute; top:9mm; left:16mm; right:16mm;
+    display:flex; justify-content:space-between; align-items:center;
+    font-size:8pt; letter-spacing:.09em; text-transform:uppercase;
+    color:#90A89A;
+  }
+  .rh b{ color:var(--court); font-weight:600 }
+  .fo{
+    position:absolute; bottom:8mm; left:16mm; right:16mm;
+    display:flex; justify-content:space-between;
+    font-size:8pt; color:#A9BDB0;
+  }
+
+  h1{ font-size:21pt; margin:0 0 2mm; letter-spacing:-.01em; line-height:1.15 }
+  .lead{ font-size:11pt; color:var(--ink2); margin:0 0 7mm; max-width:150mm }
+  .kicker{
+    font-size:8pt; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--court); margin:0 0 2mm;
+  }
+
+  /* ── the two-column body: phone on the left, steps on the right ── */
+  .cols{ display:flex; gap:9mm; align-items:flex-start }
+  .shot{
+    width:78mm; flex:none;
+    border:1.2mm solid #16281E; border-radius:7mm;
+    overflow:hidden; background:#16281E;
+    box-shadow:0 2mm 6mm rgba(15,36,25,.16);
+  }
+  .shot img{ display:block; width:100%; height:auto }
+  .shot.wide{ width:86mm }
+  /* Two phones side by side need to be smaller, or the steps below them
+     run off the bottom of the sheet. */
+  .cols.pair .shot{ width:70mm }
+  .steps{ flex:1; min-width:0 }
+
+  ol.steps-list{ margin:0; padding:0; list-style:none; counter-reset:s }
+  ol.steps-list li{
+    position:relative; padding-left:9mm; margin-bottom:4.5mm; counter-increment:s;
+  }
+  ol.steps-list li::before{
+    content:counter(s); position:absolute; left:0; top:-0.3mm;
+    width:6mm; height:6mm; border-radius:50%;
+    background:var(--court); color:#fff;
+    font-size:8.5pt; display:flex; align-items:center; justify-content:center;
+  }
+  ol.steps-list b{ color:var(--ink) }
+  ol.steps-list p{ margin:1mm 0 0; color:var(--ink2); font-size:9.5pt }
+
+  .note{
+    background:#FFF8E4; border:0.5mm solid #F3DFA6; color:#7A5A00;
+    border-radius:3mm; padding:4mm 5mm; font-size:9.5pt; margin-top:6mm;
+  }
+  .note b{ color:#5E4600 }
+  .tip{
+    background:var(--mint); border:0.5mm solid #9FE3BC; color:#0A4A2B;
+    border-radius:3mm; padding:4mm 5mm; font-size:9.5pt; margin-top:6mm;
+  }
+  .warn{
+    background:#FDEEF0; border:0.5mm solid #F3BDC5; color:var(--rose-d);
+    border-radius:3mm; padding:4mm 5mm; font-size:9.5pt; margin-top:6mm;
+  }
+
+  /* ── cover ────────────────────────────────────────────────────── */
+  .cover{
+    background:linear-gradient(160deg,#0E8A4F 0%,#0A6B3C 58%,#07522E 100%);
+    color:#fff; padding:0; display:flex; flex-direction:column;
+    justify-content:center; align-items:center; text-align:center;
+  }
+  .cover .net{
+    position:absolute; inset:0;
+    background-image:linear-gradient(90deg,rgba(255,255,255,.085) 1px,transparent 1px),
+                     linear-gradient(0deg,rgba(255,255,255,.085) 1px,transparent 1px);
+    background-size:11mm 11mm;
+  }
+  .cover .inner{ position:relative; z-index:1 }
+  .cover img.logo{ width:28mm; height:28mm; border-radius:7mm; margin-bottom:8mm }
+  .cover h1{ font-size:44pt; margin:0; letter-spacing:-.02em }
+  .cover .sub{ font-size:14pt; opacity:.92; margin-top:3mm }
+  .cover .ver{
+    display:inline-block; margin-top:12mm; padding:2.5mm 7mm;
+    border:0.6mm solid rgba(255,255,255,.5); border-radius:99mm;
+    font-size:11pt; letter-spacing:.06em;
+  }
+  .cover .foot{
+    position:absolute; bottom:16mm; left:0; right:0;
+    font-size:9.5pt; opacity:.78; z-index:1;
+  }
+
+  /* ── tier swatches ────────────────────────────────────────────── */
+  .tiers{ display:flex; flex-direction:column; gap:2.6mm; margin:0 }
+  .tier{
+    display:flex; align-items:center; gap:4mm;
+    border:0.4mm solid var(--line); border-radius:3mm;
+    padding:2.6mm 4mm; background:var(--card);
+  }
+  .tier .dot{ width:5mm; height:5mm; border-radius:50%; flex:none }
+  .tier .nm{ font-size:10.5pt; min-width:36mm }
+  .tier .ds{ font-size:9pt; color:var(--ink2) }
+
+  /* ── install page ─────────────────────────────────────────────── */
+  .two{ display:flex; gap:8mm; align-items:stretch }
+  .half{
+    flex:1; min-width:0; border:0.5mm solid var(--line);
+    border-radius:4mm; padding:6mm 6mm 5mm; background:var(--card);
+  }
+  .half h2{
+    font-size:13pt; margin:0 0 1mm; display:flex; align-items:center; gap:3mm;
+  }
+  .half .os{ font-size:8.5pt; color:var(--ink2); margin:0 0 5mm }
+  .half ol{ margin:0; padding:0; list-style:none; counter-reset:t }
+  .half ol li{
+    position:relative; padding-left:8mm; margin-bottom:3.6mm;
+    counter-increment:t; font-size:9.5pt; line-height:1.45;
+  }
+  .half ol li::before{
+    content:counter(t); position:absolute; left:0; top:0;
+    width:5.4mm; height:5.4mm; border-radius:50%;
+    background:var(--ground); color:var(--court-d);
+    border:0.4mm solid var(--line);
+    font-size:8pt; display:flex; align-items:center; justify-content:center;
+  }
+  .gly{
+    display:inline-flex; align-items:center; justify-content:center;
+    min-width:6.5mm; height:6.5mm; padding:0 1.6mm; vertical-align:-1.7mm;
+    border:0.4mm solid var(--line); border-radius:1.8mm;
+    background:var(--ground); margin:0 .6mm;
+  }
+  .gly svg{ width:3.6mm; height:3.6mm; stroke:var(--court-d); fill:none;
+            stroke-width:2; stroke-linecap:round; stroke-linejoin:round }
+  .why{ display:flex; gap:5mm; margin-top:7mm }
+  .why .w{
+    flex:1; background:var(--ground); border-radius:3mm; padding:4mm 5mm;
+    font-size:9.5pt; color:var(--ink2);
+  }
+  .why .w b{ display:block; color:var(--ink); margin-bottom:1mm; font-size:10pt }
+
+  .url{
+    font-family:ui-monospace,Menlo,monospace; font-size:10pt;
+    background:var(--ground); border:0.4mm solid var(--line);
+    border-radius:2mm; padding:1mm 2.5mm; color:var(--court-d);
+  }
+</style>
+
+<!-- ═══════════════════ 1. COVER ═══════════════════ -->
+<section class="page cover">
+  <div class="net"></div>
+  <div class="inner">
+    <img class="logo" src="../icon.png" alt="">
+    <h1>Mabyo</h1>
+    <div class="sub">Host guide</div>
+    <div class="ver">Build v69</div>
+  </div>
+  <div class="foot">Running a mabar, court by court · mabyo.pages.dev</div>
+</section>
+
+<!-- ═══════════════════ 2. GET EVERYONE IN ═══════════════════ -->
+<section class="page">
+  <div class="rh"><span><b>Mabyo</b> host guide</span><span>Getting started</span></div>
+  <p class="kicker">Step one</p>
+  <h1>Get everyone in</h1>
+  <p class="lead">Most hosts already have the night's list in a WhatsApp group.
+     Paste it in rather than typing thirty names one at a time.</p>
+
+  <div class="cols">
+    <div class="shot"><img src="shots/paste.png" alt="Paste a list"></div>
+    <div class="steps">
+      <ol class="steps-list">
+        <li><b>Open the Players tab</b>
+          <p>The bottom bar is always there. Players is the third icon.</p></li>
+        <li><b>Tap “Paste a list”</b>
+          <p>Copy the message from your group chat and paste the whole thing.</p></li>
+        <li><b>Mabyo reads the names</b>
+          <p>Numbering, bullets, dots, emoji and blank lines are all stripped out.
+             A line like <i>“1. Budi (lvl 3)”</i> becomes <i>Budi</i>.</p></li>
+        <li><b>Check what it found</b>
+          <p>You see the list before anything is added. Anyone already in
+             tonight's list is skipped, so pasting twice is safe.</p></li>
+        <li><b>Add them</b>
+          <p>Everyone arrives in one group. Sorting them by level is the
+             next page.</p></li>
+      </ol>
+      <div class="tip"><b>Faster still:</b> once you have hosted a few nights,
+        use <b>Roster history</b> instead. It remembers every player you have
+        ever added, with their level, so a regular night is a few taps.</div>
+    </div>
+  </div>
+  <div class="fo"><span>Mabyo v69</span><span>2</span></div>
+</section>
+
+<!-- ═══════════════════ 3. LEVELS ═══════════════════ -->
+<section class="page">
+  <div class="rh"><span><b>Mabyo</b> host guide</span><span>Levels</span></div>
+  <p class="kicker">Step two</p>
+  <h1>Put people in the right level</h1>
+  <p class="lead">This is the one thing that decides whether the games are any
+     good. Mabyo builds every match from this order — nothing else.</p>
+
+  <div class="cols">
+    <div class="shot"><img src="shots/players.png" alt="The player list"></div>
+    <div class="steps">
+      <div class="tiers">
+        <div class="tier"><span class="dot" style="background:var(--adv)"></span>
+          <span class="nm">Advanced</span><span class="ds">club level, plays everywhere</span></div>
+        <div class="tier"><span class="dot" style="background:var(--upp)"></span>
+          <span class="nm">Upper Intermediate</span><span class="ds">strong, consistent</span></div>
+        <div class="tier"><span class="dot" style="background:var(--int)"></span>
+          <span class="nm">Intermediate</span><span class="ds">the middle of most mabar</span></div>
+        <div class="tier"><span class="dot" style="background:var(--beg)"></span>
+          <span class="nm">Beginner</span><span class="ds">knows the rules, still learning</span></div>
+        <div class="tier"><span class="dot" style="background:var(--nwb)"></span>
+          <span class="nm">Newbie</span><span class="ds">first few sessions</span></div>
+        <div class="tier"><span class="dot" style="background:var(--new)"></span>
+          <span class="nm">New players</span><span class="ds">not graded yet</span></div>
+      </div>
+
+      <ol class="steps-list" style="margin-top:6mm">
+        <li><b>Drag a name to move it</b>
+          <p>Use the grip on the right. Drop it inside another level to
+             re-grade, or higher and lower within a level to fine-tune.</p></li>
+        <li><b>The number is their rank</b>
+          <p>Position inside the list is what the matchmaker reads. Points
+             won are just the scoreboard — they never change who you play.</p></li>
+        <li><b>Tap a name to rename, re-group or remove</b></li>
+      </ol>
+      <div class="note"><b>New players</b> is a holding pen, not a skill. Anyone
+        left there is graded as if they were Intermediate, so move them as soon
+        as you have seen them play a game.</div>
+    </div>
+  </div>
+  <div class="fo"><span>Mabyo v69</span><span>3</span></div>
+</section>
+
+<!-- ═══════════════════ 4. WHO IS HERE ═══════════════════ -->
+<section class="page">
+  <div class="rh"><span><b>Mabyo</b> host guide</span><span>Who is here</span></div>
+  <p class="kicker">During the night</p>
+  <h1>Who is here, who has gone home</h1>
+  <p class="lead">People arrive late and leave early. Mark them away instead of
+     deleting them — the app keeps their games and their level.</p>
+
+  <div class="cols">
+    <div class="shot"><img src="shots/away.png" alt="Away players"></div>
+    <div class="steps">
+      <ol class="steps-list">
+        <li><b>Tap “Away” beside a name</b>
+          <p>They stop being drawn onto courts straight away. Anyone mid-game
+             finishes the game they are in.</p></li>
+        <li><b>Away rows turn red</b>
+          <p>You can see at a glance who is not playing. Tap the button again
+             when they come back.</p></li>
+        <li><b>Nothing is lost</b>
+          <p>Games played, wins and level all stay. Somebody who leaves at
+             nine and returns at ten keeps their place in the queue order.</p></li>
+      </ol>
+      <div class="warn"><b>Do not use “Clear tonight's list”</b> for someone
+        going home. That empties the whole night. Away is the button you want.</div>
+    </div>
+  </div>
+  <div class="fo"><span>Mabyo v69</span><span>4</span></div>
+</section>
+
+<!-- ═══════════════════ 5. THE GAME SCREEN ═══════════════════ -->
+<section class="page">
+  <div class="rh"><span><b>Mabyo</b> host guide</span><span>The game screen</span></div>
+  <p class="kicker">The main screen</p>
+  <h1>Courts and the queue</h1>
+  <p class="lead">This is the screen you will spend the night on. Who is on,
+     who is next, and how even each match is.</p>
+
+  <div class="cols">
+    <div class="shot"><img src="shots/game.png" alt="The game screen"></div>
+    <div class="steps">
+      <ol class="steps-list">
+        <li><b>Waiting, at the top</b>
+          <p>The next four to go on. “See all waiting” opens the full queue in
+             order — nobody plays ahead of someone with fewer games.</p></li>
+        <li><b>Each court shows its level</b>
+          <p>“Advanced + Upper Intermediate” tells you what kind of game this
+             is. The colour matches the levels playing.</p></li>
+        <li><b>The balance badge</b>
+          <p><b>Very balanced 100%</b> means the two pairs are evenly matched.
+             A lower number means one side is stronger — usually because not
+             enough people of that level are free yet.</p></li>
+        <li><b>Courts fill themselves</b>
+          <p>Finish a match and the next four walk on. You do not pick teams.</p></li>
+      </ol>
+    </div>
+  </div>
+  <div class="fo"><span>Mabyo v69</span><span>5</span></div>
+</section>
+
+<!-- ═══════════════════ 6. SAVING A RESULT ═══════════════════ -->
+<section class="page">
+  <div class="rh"><span><b>Mabyo</b> host guide</span><span>Results</span></div>
+  <p class="kicker">After every game</p>
+  <h1>Save the result in one tap</h1>
+  <p class="lead">The fastest part of the night, and the part you do forty times.
+     Picking the winner and drawing the next four is a single action.</p>
+
+  <div class="cols">
+    <div class="shot"><img src="shots/result.png" alt="Entering a result"></div>
+    <div class="steps">
+      <ol class="steps-list">
+        <li><b>Tap the court that finished</b></li>
+        <li><b>Pick the side that won</b>
+          <p>Tap either pair. That is the whole entry if you are counting wins.</p></li>
+        <li><b>Tap “Saved · next team”</b>
+          <p>The result is stored and the next four are drawn onto the court
+             in the same tap.</p></li>
+        <li><b>Got it wrong? Undo</b>
+          <p>A toast appears at the bottom with an <b>Undo</b> button. It puts
+             the four back on the court exactly as they were.</p></li>
+      </ol>
+      <div class="note"><b>Counting points instead?</b> Settings lets you record
+        scores. <b>First to 21</b> asks for the loser's score; <b>Combined 21</b>
+        asks for the winner's. Either way the winner is whoever you tapped.</div>
+    </div>
+  </div>
+  <div class="fo"><span>Mabyo v69</span><span>6</span></div>
+</section>
+
+<!-- ═══════════════════ 7. SWAPPING ═══════════════════ -->
+<section class="page">
+  <div class="rh"><span><b>Mabyo</b> host guide</span><span>Swapping</span></div>
+  <p class="kicker">When you need to overrule it</p>
+  <h1>Swap anyone onto a court</h1>
+  <p class="lead">Someone asks to sit out, or two friends want a game together.
+     You can always override the draw.</p>
+
+  <div class="cols pair">
+    <div class="shot"><img src="shots/swap.png" alt="A player selected for swapping"></div>
+    <div class="shot"><img src="shots/waiting.png" alt="The full waiting list"></div>
+  </div>
+
+  <ol class="steps-list" style="margin-top:7mm; columns:2; column-gap:9mm">
+    <li><b>Tap a player on court</b>
+      <p>Their row lifts and the queue below becomes tappable.</p></li>
+    <li><b>Tap who you want instead</b>
+      <p>Any of the four shown, or open <b>See all waiting</b> and take anyone
+         in the queue — including the very last person.</p></li>
+    <li><b>They change places</b>
+      <p>The court player goes back to the queue in the other one's position.</p></li>
+    <li><b>Tap the lifted player again to cancel</b></li>
+  </ol>
+  <div class="tip">Swapping is a manual override, so it does not count against
+    anyone's fairness. The queue keeps working normally on the next draw.</div>
+  <div class="fo"><span>Mabyo v69</span><span>7</span></div>
+</section>
+
+<!-- ═══════════════════ 8. LEADERBOARD + HISTORY ═══════════════════ -->
+<section class="page">
+  <div class="rh"><span><b>Mabyo</b> host guide</span><span>Leaderboard &amp; history</span></div>
+  <p class="kicker">Keeping score</p>
+  <h1>The leaderboard and the history</h1>
+  <p class="lead">Two tabs that answer the two questions people ask you all
+     night: “how many have I played?” and “who won that one?”</p>
+
+  <div class="cols pair">
+    <div class="shot"><img src="shots/board.png" alt="Leaderboard"></div>
+    <div class="shot"><img src="shots/history.png" alt="History"></div>
+  </div>
+
+  <ol class="steps-list" style="margin-top:7mm; columns:2; column-gap:9mm">
+    <li><b>Leaderboard</b>
+      <p>Wins and games for everyone here tonight. Useful for settling
+         arguments and for spotting who has been waiting too long.</p></li>
+    <li><b>History</b>
+      <p>Every match played, newest first, with who was on each side.</p></li>
+    <li><b>Any match can be edited</b>
+      <p>Not just the last one. Tap a match in History to change the winner or
+         the score — the leaderboard updates itself.</p></li>
+    <li><b>It survives a reload</b>
+      <p>The night is saved on the device as you go. Closing the browser or
+         running out of battery does not lose the session.</p></li>
+  </ol>
+  <div class="fo"><span>Mabyo v69</span><span>8</span></div>
+</section>
+
+<!-- ═══════════════════ 9. SETTINGS ═══════════════════ -->
+<section class="page">
+  <div class="rh"><span><b>Mabyo</b> host guide</span><span>Settings</span></div>
+  <p class="kicker">Set once, at the start</p>
+  <h1>Settings worth knowing</h1>
+  <p class="lead">Most of these you set on your first night and never touch
+     again. Two of them change how the whole evening runs.</p>
+
+  <div class="cols">
+    <div class="shot"><img src="shots/settings.png" alt="Settings"></div>
+    <div class="steps">
+      <ol class="steps-list">
+        <li><b>Courts</b>
+          <p>How many you have booked. Change it mid-session if a court frees
+             up — the queue adjusts on the next draw.</p></li>
+        <li><b>Scoring</b>
+          <p><b>Wins only</b> is one tap per game. <b>Points</b> asks for a
+             score as well. Wins only is what most hosts use.</p></li>
+        <li><b>Level matching</b>
+          <p>How strictly Mabyo keeps a court to one level. Looser matching
+             fills courts faster on a quiet night.</p></li>
+        <li><b>Clear tonight's list</b>
+          <p>Ends the session and empties the list of who is here — but keeps
+             your roster history, so next week is still quick.</p></li>
+      </ol>
+      <div class="warn">Clearing is not undoable. Mabyo asks first, and the
+        confirmation says how many players will be removed.</div>
+    </div>
+  </div>
+  <div class="fo"><span>Mabyo v69</span><span>9</span></div>
+</section>
+
+<!-- ═══════════════════ 10. ADD TO HOME SCREEN ═══════════════════ -->
+<section class="page">
+  <div class="rh"><span><b>Mabyo</b> host guide</span><span>Install</span></div>
+  <p class="kicker">Do this once, on your phone</p>
+  <h1>Put Mabyo on your Home Screen</h1>
+  <p class="lead">Mabyo runs in the browser, but it is built to be installed.
+     Adding it to your Home Screen takes about fifteen seconds and makes it
+     behave like a normal app. Open <span class="url">mabyo.pages.dev</span>
+     first, then follow your phone.</p>
+
+  <div class="two">
+    <!-- iPhone -->
+    <div class="half">
+      <h2>iPhone &amp; iPad</h2>
+      <p class="os">You must use <b>Safari</b>. Chrome on iPhone cannot install it.</p>
+      <ol>
+        <li>Open <span class="url">mabyo.pages.dev</span> in <b>Safari</b>.</li>
+        <li>Tap the <b>Share</b> button
+          <span class="gly" aria-hidden="true"><svg viewBox="0 0 24 24">
+            <path d="M12 16V4M12 4 8 8M12 4l4 4"/>
+            <path d="M5 13v6a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-6"/></svg></span>
+          — the square with an arrow pointing up. It is at the
+          <b>bottom</b> of the screen on iPhone, and at the <b>top right</b>
+          on iPad.</li>
+        <li>Scroll down the grey list of actions.</li>
+        <li>Tap <b>Add to Home Screen</b>
+          <span class="gly" aria-hidden="true"><svg viewBox="0 0 24 24">
+            <rect x="4" y="4" width="16" height="16" rx="3"/>
+            <path d="M12 9v6M9 12h6"/></svg></span>.</li>
+        <li>Rename it if you like, then tap <b>Add</b> at the top right.</li>
+        <li>Close Safari. Open <b>Mabyo</b> from your Home Screen from now on.</li>
+      </ol>
+    </div>
+
+    <!-- Android -->
+    <div class="half">
+      <h2>Android</h2>
+      <p class="os">Chrome, Edge or Samsung Internet all work.</p>
+      <ol>
+        <li>Open <span class="url">mabyo.pages.dev</span> in <b>Chrome</b>.</li>
+        <li>Tap the <b>menu</b>
+          <span class="gly" aria-hidden="true"><svg viewBox="0 0 24 24">
+            <circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none"/>
+            <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>
+            <circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none"/></svg></span>
+          — three dots at the <b>top right</b>.</li>
+        <li>Tap <b>Add to Home screen</b>, or <b>Install app</b> if that is what
+          your phone calls it. Both do the same thing.</li>
+        <li>Tap <b>Install</b> or <b>Add</b> to confirm.</li>
+        <li>Some phones then ask whether to place the icon — tap
+          <b>Add automatically</b>.</li>
+        <li>Open <b>Mabyo</b> from your home screen or app drawer from now on.</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="why">
+    <div class="w"><b>More screen</b>
+      No address bar and no browser buttons, so you see two or three more rows
+      of the queue on the same phone.</div>
+    <div class="w"><b>Stays signed in</b>
+      An installed Mabyo keeps your session far longer. A browser tab you have
+      not opened for a week may ask you to sign in again.</div>
+    <div class="w"><b>One tap to open</b>
+      No typing the address, no hunting through tabs while people are waiting
+      for a court.</div>
+  </div>
+
+  <div class="note" style="margin-top:6mm"><b>Nothing is downloaded from a
+    store.</b> The icon is a shortcut to the same web app, so it updates itself
+    — you are always on the newest version without doing anything.</div>
+  <div class="fo"><span>Mabyo v69</span><span>10</span></div>
+</section>
+
+<!-- ═══════════════════ 11. YOUR ACCOUNT ═══════════════════ -->
+<section class="page">
+  <div class="rh"><span><b>Mabyo</b> host guide</span><span>Your account</span></div>
+  <p class="kicker">Signing in</p>
+  <h1>Your account</h1>
+  <p class="lead">Mabyo accounts are issued by the organiser, not signed up for.
+     You should have been sent an email address and a password.</p>
+
+  <div class="cols">
+    <div class="shot"><img src="shots/empty.png" alt="A fresh session"></div>
+    <div class="steps">
+      <ol class="steps-list">
+        <li><b>Sign in once per device</b>
+          <p>Mabyo remembers you. You should not have to type the password
+             again on that phone.</p></li>
+        <li><b>The session lives on your phone</b>
+          <p>Tonight's players, courts and results are stored on the device
+             you are hosting from. Hosting from a different phone starts a
+             separate night.</p></li>
+        <li><b>It works without signal</b>
+          <p>Sports halls have bad reception. Mabyo keeps running offline and
+             catches up when the signal returns.</p></li>
+        <li><b>The build number</b>
+          <p>Top right of every screen — <b>v69</b> here. If something looks
+             wrong, send a screenshot; that number says which version you are
+             on.</p></li>
+      </ol>
+      <div class="warn"><b>Do not share your password.</b> One account is meant
+        for one host. If a second person needs to run their own nights, they
+        need their own account.</div>
+    </div>
+  </div>
+  <div class="fo"><span>Mabyo v69</span><span>11</span></div>
+</section>
+
+<!-- ═══════════════════ 12. IF SOMETHING GOES WRONG ═══════════════════ -->
+<section class="page">
+  <div class="rh"><span><b>Mabyo</b> host guide</span><span>Troubleshooting</span></div>
+  <p class="kicker">On the night</p>
+  <h1>If something goes wrong</h1>
+  <p class="lead">Short answers to the things hosts actually run into, in the
+     order they tend to happen.</p>
+
+  <ol class="steps-list" style="columns:2; column-gap:10mm; margin-top:2mm">
+    <li><b>Someone is on court who should not be</b>
+      <p>Tap them, then tap whoever should be playing. See page 7.</p></li>
+    <li><b>I saved the wrong winner</b>
+      <p>Hit <b>Undo</b> in the toast straight away, or fix it later from the
+         History tab — any match can be edited, not just the last.</p></li>
+    <li><b>A court is sitting empty</b>
+      <p>Usually too few people free at that level. Loosen level matching in
+         Settings, or check how many are marked Away.</p></li>
+    <li><b>Somebody says they have not played in ages</b>
+      <p>Open <b>See all waiting</b>. The queue is strictly ordered by games
+         played, so their position is the honest answer.</p></li>
+    <li><b>The page zoomed in when I tapped a box</b>
+      <p>Fixed in v69. If it still happens, you are on an old cached version —
+         close all tabs and reopen.</p></li>
+    <li><b>It is asking me to sign in again</b>
+      <p>Normal if you have not opened it for a week or so in a browser tab.
+         Installing it to your Home Screen largely stops this — see page 10.</p></li>
+    <li><b>I cleared the list by mistake</b>
+      <p>Tonight's players are gone, but <b>Roster history</b> still has
+         everyone with their levels. Re-add them from there.</p></li>
+    <li><b>Nothing is loading</b>
+      <p>Mabyo works offline, so this is usually a stale version. Close every
+         Mabyo tab, reopen, and check the build number top right.</p></li>
+  </ol>
+
+  <div class="tip" style="margin-top:8mm"><b>Still stuck?</b> Send your
+    organiser a screenshot of the whole screen. The build number in the top
+    right corner is the first thing they will look at.</div>
+  <div class="fo"><span>Mabyo v69</span><span>12</span></div>
+</section>
+</html>

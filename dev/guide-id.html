@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="id">
+<meta charset="utf-8">
+<title>Panduan Host Mabyo</title>
+<!--
+  Sumber untuk Mabyo-Panduan-Host.pdf. Render dengan dev/guide-build.sh.
+
+  Tampilan aplikasi berbahasa Inggris, jadi setiap nama tombol ditulis
+  TETAP dalam bahasa Inggris dan dicetak tebal -- itulah yang dilihat host
+  di layar. Penjelasannya bahasa Indonesia. Menerjemahkan nama tombol akan
+  membuat panduan ini tidak cocok dengan aplikasinya.
+
+  Semua tangkapan layar diambil dari index.html yang sudah dirilis, lewat
+  dev/guide-capture.sh. Tidak ada yang digambar manual.
+-->
+<link rel="stylesheet" href="guide-font.css">
+<style>
+  @page { size: A4 portrait; margin: 0 }
+
+  :root{
+    --court:#0E8A4F; --court-d:#0A6B3C; --ground:#F1F7F0; --card:#fff;
+    --ink:#0F2419; --ink2:#4A6553; --line:#DBE8DC;
+    --adv:#7B5CFF; --upp:#2E90F5; --int:#58C7EC; --beg:#C8880A; --nwb:#D6BC00;
+    --new:#9AA7AE; --rose:#FBC3C9; --rose-d:#9B2C3A; --mint:#D6F7E0;
+  }
+  *{ box-sizing:border-box; -webkit-print-color-adjust:exact; print-color-adjust:exact }
+  html,body{ margin:0; padding:0 }
+  body{
+    font-family:'Fredoka', ui-rounded, system-ui, sans-serif;
+    color:var(--ink); background:#fff; font-size:10.5pt; line-height:1.5;
+  }
+
+  .page{
+    position:relative; width:210mm; height:297mm; overflow:hidden;
+    page-break-after:always; background:#fff;
+    padding:18mm 16mm 14mm;
+  }
+  .page:last-child{ page-break-after:auto }
+
+  .rh{
+    position:absolute; top:9mm; left:16mm; right:16mm;
+    display:flex; justify-content:space-between; align-items:center;
+    font-size:8pt; letter-spacing:.09em; text-transform:uppercase;
+    color:#90A89A;
+  }
+  .rh b{ color:var(--court); font-weight:600 }
+  .fo{
+    position:absolute; bottom:8mm; left:16mm; right:16mm;
+    display:flex; justify-content:space-between;
+    font-size:8pt; color:#A9BDB0;
+  }
+
+  h1{ font-size:21pt; margin:0 0 2mm; letter-spacing:-.01em; line-height:1.15 }
+  .lead{ font-size:11pt; color:var(--ink2); margin:0 0 7mm; max-width:150mm }
+  .kicker{
+    font-size:8pt; letter-spacing:.12em; text-transform:uppercase;
+    color:var(--court); margin:0 0 2mm;
+  }
+
+  .cols{ display:flex; gap:9mm; align-items:flex-start }
+  .shot{
+    width:78mm; flex:none;
+    border:1.2mm solid #16281E; border-radius:7mm;
+    overflow:hidden; background:#16281E;
+    box-shadow:0 2mm 6mm rgba(15,36,25,.16);
+  }
+  .shot img{ display:block; width:100%; height:auto }
+  .shot.wide{ width:86mm }
+  /* Dua ponsel berdampingan harus lebih kecil, kalau tidak langkah di
+     bawahnya akan melewati batas bawah halaman. */
+  .cols.pair .shot{ width:70mm }
+  .steps{ flex:1; min-width:0 }
+
+  ol.steps-list{ margin:0; padding:0; list-style:none; counter-reset:s }
+  ol.steps-list li{
+    position:relative; padding-left:9mm; margin-bottom:4.5mm; counter-increment:s;
+  }
+  ol.steps-list li::before{
+    content:counter(s); position:absolute; left:0; top:-0.3mm;
+    width:6mm; height:6mm; border-radius:50%;
+    background:var(--court); color:#fff;
+    font-size:8.5pt; display:flex; align-items:center; justify-content:center;
+  }
+  ol.steps-list b{ color:var(--ink) }
+  ol.steps-list p{ margin:1mm 0 0; color:var(--ink2); font-size:9.5pt }
+
+  .note{
+    background:#FFF8E4; border:0.5mm solid #F3DFA6; color:#7A5A00;
+    border-radius:3mm; padding:4mm 5mm; font-size:9.5pt; margin-top:6mm;
+  }
+  .note b{ color:#5E4600 }
+  .tip{
+    background:var(--mint); border:0.5mm solid #9FE3BC; color:#0A4A2B;
+    border-radius:3mm; padding:4mm 5mm; font-size:9.5pt; margin-top:6mm;
+  }
+  .warn{
+    background:#FDEEF0; border:0.5mm solid #F3BDC5; color:var(--rose-d);
+    border-radius:3mm; padding:4mm 5mm; font-size:9.5pt; margin-top:6mm;
+  }
+
+  .cover{
+    background:linear-gradient(160deg,#0E8A4F 0%,#0A6B3C 58%,#07522E 100%);
+    color:#fff; padding:0; display:flex; flex-direction:column;
+    justify-content:center; align-items:center; text-align:center;
+  }
+  .cover .net{
+    position:absolute; inset:0;
+    background-image:linear-gradient(90deg,rgba(255,255,255,.085) 1px,transparent 1px),
+                     linear-gradient(0deg,rgba(255,255,255,.085) 1px,transparent 1px);
+    background-size:11mm 11mm;
+  }
+  .cover .inner{ position:relative; z-index:1 }
+  .cover img.logo{ width:28mm; height:28mm; border-radius:7mm; margin-bottom:8mm }
+  .cover h1{ font-size:44pt; margin:0; letter-spacing:-.02em }
+  .cover .sub{ font-size:14pt; opacity:.92; margin-top:3mm }
+  .cover .ver{
+    display:inline-block; margin-top:12mm; padding:2.5mm 7mm;
+    border:0.6mm solid rgba(255,255,255,.5); border-radius:99mm;
+    font-size:11pt; letter-spacing:.06em;
+  }
+  .cover .foot{
+    position:absolute; bottom:16mm; left:0; right:0;
+    font-size:9.5pt; opacity:.78; z-index:1;
+  }
+
+  .tiers{ display:flex; flex-direction:column; gap:2.6mm; margin:0 }
+  .tier{
+    display:flex; align-items:center; gap:4mm;
+    border:0.4mm solid var(--line); border-radius:3mm;
+    padding:2.6mm 4mm; background:var(--card);
+  }
+  .tier .dot{ width:5mm; height:5mm; border-radius:50%; flex:none }
+  .tier .nm{ font-size:10.5pt; min-width:36mm }
+  .tier .ds{ font-size:9pt; color:var(--ink2) }
+
+  .two{ display:flex; gap:8mm; align-items:stretch }
+  .half{
+    flex:1; min-width:0; border:0.5mm solid var(--line);
+    border-radius:4mm; padding:6mm 6mm 5mm; background:var(--card);
+  }
+  .half h2{ font-size:13pt; margin:0 0 1mm; display:flex; align-items:center; gap:3mm }
+  .half .os{ font-size:8.5pt; color:var(--ink2); margin:0 0 5mm }
+  .half ol{ margin:0; padding:0; list-style:none; counter-reset:t }
+  .half ol li{
+    position:relative; padding-left:8mm; margin-bottom:3.6mm;
+    counter-increment:t; font-size:9.5pt; line-height:1.45;
+  }
+  .half ol li::before{
+    content:counter(t); position:absolute; left:0; top:0;
+    width:5.4mm; height:5.4mm; border-radius:50%;
+    background:var(--ground); color:var(--court-d);
+    border:0.4mm solid var(--line);
+    font-size:8pt; display:flex; align-items:center; justify-content:center;
+  }
+  .gly{
+    display:inline-flex; align-items:center; justify-content:center;
+    min-width:6.5mm; height:6.5mm; padding:0 1.6mm; vertical-align:-1.7mm;
+    border:0.4mm solid var(--line); border-radius:1.8mm;
+    background:var(--ground); margin:0 .6mm;
+  }
+  .gly svg{ width:3.6mm; height:3.6mm; stroke:var(--court-d); fill:none;
+            stroke-width:2; stroke-linecap:round; stroke-linejoin:round }
+  .why{ display:flex; gap:5mm; margin-top:7mm }
+  .why .w{
+    flex:1; background:var(--ground); border-radius:3mm; padding:4mm 5mm;
+    font-size:9.5pt; color:var(--ink2);
+  }
+  .why .w b{ display:block; color:var(--ink); margin-bottom:1mm; font-size:10pt }
+
+  .url{
+    font-family:ui-monospace,Menlo,monospace; font-size:10pt;
+    background:var(--ground); border:0.4mm solid var(--line);
+    border-radius:2mm; padding:1mm 2.5mm; color:var(--court-d);
+  }
+</style>
+
+<!-- ═══════════════════ 1. SAMPUL ═══════════════════ -->
+<section class="page cover">
+  <div class="net"></div>
+  <div class="inner">
+    <img class="logo" src="../icon.png" alt="">
+    <h1>Mabyo</h1>
+    <div class="sub">Panduan host</div>
+    <div class="ver">Build v69</div>
+  </div>
+  <div class="foot">Mengatur mabar, lapangan demi lapangan · mabyo.pages.dev</div>
+</section>
+
+<!-- ═══════════════════ 2. MASUKKAN PEMAIN ═══════════════════ -->
+<section class="page">
+  <div class="rh"><span><b>Mabyo</b> panduan host</span><span>Memulai</span></div>
+  <p class="kicker">Langkah satu</p>
+  <h1>Masukkan semua pemain</h1>
+  <p class="lead">Biasanya daftar peserta malam ini sudah ada di grup WhatsApp.
+     Tempel saja daftarnya, daripada mengetik tiga puluh nama satu per satu.</p>
+
+  <div class="cols">
+    <div class="shot"><img src="shots/paste.png" alt="Paste a list"></div>
+    <div class="steps">
+      <ol class="steps-list">
+        <li><b>Buka tab Players</b>
+          <p>Bar bawah selalu ada. <b>Players</b> adalah ikon ketiga.</p></li>
+        <li><b>Ketuk “Paste a list”</b>
+          <p>Salin pesan dari grup, lalu tempel semuanya sekaligus.</p></li>
+        <li><b>Mabyo membaca namanya</b>
+          <p>Nomor, bullet, titik, emoji dan baris kosong otomatis dibuang.
+             Baris seperti <i>“1. Budi (lvl 3)”</i> menjadi <i>Budi</i>.</p></li>
+        <li><b>Periksa hasilnya</b>
+          <p>Daftar ditampilkan dulu sebelum ditambahkan. Nama yang sudah ada
+             malam ini dilewati, jadi menempel dua kali tetap aman.</p></li>
+        <li><b>Tambahkan</b>
+          <p>Semua masuk dalam satu kelompok. Mengaturnya per level dibahas
+             di halaman berikutnya.</p></li>
+      </ol>
+      <div class="tip"><b>Lebih cepat lagi:</b> setelah beberapa kali mabar,
+        pakai <b>Roster history</b>. Mabyo mengingat semua pemain yang pernah
+        Anda tambahkan beserta levelnya, jadi malam rutin cukup beberapa
+        ketukan saja.</div>
+    </div>
+  </div>
+  <div class="fo"><span>Mabyo v69</span><span>2</span></div>
+</section>
+
+<!-- ═══════════════════ 3. LEVEL ═══════════════════ -->
+<section class="page">
+  <div class="rh"><span><b>Mabyo</b> panduan host</span><span>Level</span></div>
+  <p class="kicker">Langkah dua</p>
+  <h1>Tempatkan pemain di level yang tepat</h1>
+  <p class="lead">Inilah satu hal yang paling menentukan seru atau tidaknya
+     permainan. Mabyo menyusun setiap pertandingan dari urutan ini — tidak
+     dari yang lain.</p>
+
+  <div class="cols">
+    <div class="shot"><img src="shots/players.png" alt="Daftar pemain"></div>
+    <div class="steps">
+      <div class="tiers">
+        <div class="tier"><span class="dot" style="background:var(--adv)"></span>
+          <span class="nm">Advanced</span><span class="ds">level klub, bisa main di mana saja</span></div>
+        <div class="tier"><span class="dot" style="background:var(--upp)"></span>
+          <span class="nm">Upper Intermediate</span><span class="ds">kuat dan konsisten</span></div>
+        <div class="tier"><span class="dot" style="background:var(--int)"></span>
+          <span class="nm">Intermediate</span><span class="ds">mayoritas peserta mabar</span></div>
+        <div class="tier"><span class="dot" style="background:var(--beg)"></span>
+          <span class="nm">Beginner</span><span class="ds">paham aturan, masih belajar</span></div>
+        <div class="tier"><span class="dot" style="background:var(--nwb)"></span>
+          <span class="nm">Newbie</span><span class="ds">baru beberapa kali main</span></div>
+        <div class="tier"><span class="dot" style="background:var(--new)"></span>
+          <span class="nm">New players</span><span class="ds">belum dinilai</span></div>
+      </div>
+
+      <ol class="steps-list" style="margin-top:6mm">
+        <li><b>Seret nama untuk memindahkan</b>
+          <p>Gunakan pegangan di sebelah kanan. Lepas di dalam level lain
+             untuk mengubah level, atau naik-turun di dalam satu level untuk
+             penyesuaian halus.</p></li>
+        <li><b>Angkanya adalah peringkat</b>
+          <p>Posisi dalam daftar itulah yang dibaca Mabyo. Poin kemenangan
+             hanya papan skor — tidak pernah memengaruhi lawan main.</p></li>
+        <li><b>Ketuk nama untuk ganti nama, pindah level, atau hapus</b></li>
+      </ol>
+      <div class="note"><b>New players</b> adalah tempat penampungan, bukan
+        level kemampuan. Siapa pun yang dibiarkan di sana dihitung setara
+        <b>Intermediate</b>, jadi pindahkan begitu Anda melihat mereka bermain
+        satu game.</div>
+    </div>
+  </div>
+  <div class="fo"><span>Mabyo v69</span><span>3</span></div>
+</section>
+
+<!-- ═══════════════════ 4. SIAPA YANG HADIR ═══════════════════ -->
+<section class="page">
+  <div class="rh"><span><b>Mabyo</b> panduan host</span><span>Kehadiran</span></div>
+  <p class="kicker">Selama mabar</p>
+  <h1>Siapa hadir, siapa sudah pulang</h1>
+  <p class="lead">Ada yang datang telat, ada yang pulang duluan. Tandai
+     <b>Away</b>, jangan dihapus — datanya dan levelnya tetap tersimpan.</p>
+
+  <div class="cols">
+    <div class="shot"><img src="shots/away.png" alt="Pemain away"></div>
+    <div class="steps">
+      <ol class="steps-list">
+        <li><b>Ketuk “Away” di samping nama</b>
+          <p>Mereka langsung berhenti ditarik ke lapangan. Yang sedang main
+             tetap menyelesaikan gamenya.</p></li>
+        <li><b>Baris away berubah merah</b>
+          <p>Sekali lihat Anda tahu siapa yang tidak bermain. Ketuk lagi kalau
+             mereka kembali.</p></li>
+        <li><b>Tidak ada data yang hilang</b>
+          <p>Jumlah game, kemenangan dan level tetap. Yang pulang jam sembilan
+             lalu kembali jam sepuluh tetap pada urutan antriannya.</p></li>
+      </ol>
+      <div class="warn"><b>Jangan pakai “Clear tonight's list”</b> untuk orang
+        yang pulang. Tombol itu mengosongkan seluruh daftar malam ini. Yang
+        Anda butuhkan adalah <b>Away</b>.</div>
+    </div>
+  </div>
+  <div class="fo"><span>Mabyo v69</span><span>4</span></div>
+</section>
+
+<!-- ═══════════════════ 5. LAYAR GAME ═══════════════════ -->
+<section class="page">
+  <div class="rh"><span><b>Mabyo</b> panduan host</span><span>Layar game</span></div>
+  <p class="kicker">Layar utama</p>
+  <h1>Lapangan dan antrian</h1>
+  <p class="lead">Di layar inilah Anda akan menghabiskan malam. Siapa yang
+     main, siapa berikutnya, dan seberapa imbang tiap pertandingan.</p>
+
+  <div class="cols">
+    <div class="shot"><img src="shots/game.png" alt="Layar game"></div>
+    <div class="steps">
+      <ol class="steps-list">
+        <li><b>Waiting, di bagian atas</b>
+          <p>Empat orang berikutnya. <b>See all waiting</b> membuka antrian
+             lengkap sesuai urutan — tidak ada yang main mendahului orang
+             dengan jumlah game lebih sedikit.</p></li>
+        <li><b>Tiap lapangan menampilkan levelnya</b>
+          <p>“Advanced + Upper Intermediate” memberi tahu jenis permainannya.
+             Warnanya mengikuti level yang bermain.</p></li>
+        <li><b>Lencana keseimbangan</b>
+          <p><b>Very balanced 100%</b> berarti kedua pasangan seimbang. Angka
+             lebih rendah berarti satu sisi lebih kuat — biasanya karena belum
+             cukup pemain selevel yang kosong.</p></li>
+        <li><b>Lapangan terisi sendiri</b>
+          <p>Selesaikan satu game, empat berikutnya langsung masuk. Anda tidak
+             perlu memilih tim.</p></li>
+      </ol>
+    </div>
+  </div>
+  <div class="fo"><span>Mabyo v69</span><span>5</span></div>
+</section>
+
+<!-- ═══════════════════ 6. SIMPAN HASIL ═══════════════════ -->
+<section class="page">
+  <div class="rh"><span><b>Mabyo</b> panduan host</span><span>Hasil</span></div>
+  <p class="kicker">Setiap selesai game</p>
+  <h1>Simpan hasil dengan satu ketukan</h1>
+  <p class="lead">Bagian tercepat sepanjang malam, dan yang Anda lakukan empat
+     puluh kali. Memilih pemenang dan menarik empat pemain berikutnya cukup
+     satu tindakan.</p>
+
+  <div class="cols">
+    <div class="shot"><img src="shots/result.png" alt="Memasukkan hasil"></div>
+    <div class="steps">
+      <ol class="steps-list">
+        <li><b>Ketuk lapangan yang selesai</b></li>
+        <li><b>Pilih sisi yang menang</b>
+          <p>Ketuk salah satu pasangan. Kalau hanya menghitung kemenangan,
+             hanya itu yang perlu.</p></li>
+        <li><b>Ketuk “Saved · next team”</b>
+          <p>Hasil tersimpan dan empat pemain berikutnya langsung masuk
+             lapangan dalam ketukan yang sama.</p></li>
+        <li><b>Salah? Undo</b>
+          <p>Notifikasi muncul di bawah dengan tombol <b>Undo</b>. Keempat
+             pemain dikembalikan ke lapangan persis seperti semula.</p></li>
+      </ol>
+      <div class="note"><b>Mau mencatat poin?</b> Di <b>Settings</b> Anda bisa
+        mencatat skor. <b>First to 21</b> menanyakan skor yang kalah;
+        <b>Combined 21</b> menanyakan skor yang menang. Pemenangnya tetap yang
+        Anda ketuk.</div>
+    </div>
+  </div>
+  <div class="fo"><span>Mabyo v69</span><span>6</span></div>
+</section>
+
+<!-- ═══════════════════ 7. TUKAR PEMAIN ═══════════════════ -->
+<section class="page">
+  <div class="rh"><span><b>Mabyo</b> panduan host</span><span>Tukar pemain</span></div>
+  <p class="kicker">Saat perlu mengambil alih</p>
+  <h1>Tukar siapa pun ke lapangan</h1>
+  <p class="lead">Ada yang minta istirahat, atau dua teman ingin main bareng.
+     Anda selalu bisa menimpa hasil undian.</p>
+
+  <div class="cols pair">
+    <div class="shot"><img src="shots/swap.png" alt="Pemain dipilih untuk ditukar"></div>
+    <div class="shot"><img src="shots/waiting.png" alt="Daftar antrian lengkap"></div>
+  </div>
+
+  <ol class="steps-list" style="margin-top:7mm; columns:2; column-gap:9mm">
+    <li><b>Ketuk pemain di lapangan</b>
+      <p>Barisnya terangkat dan antrian di bawah menjadi bisa diketuk.</p></li>
+    <li><b>Ketuk pengganti yang Anda mau</b>
+      <p>Salah satu dari empat yang tampil, atau buka <b>See all waiting</b>
+         dan ambil siapa pun di antrian — termasuk orang paling belakang.</p></li>
+    <li><b>Keduanya bertukar tempat</b>
+      <p>Pemain di lapangan kembali ke antrian di posisi orang tadi.</p></li>
+    <li><b>Ketuk lagi pemain yang terangkat untuk membatalkan</b></li>
+  </ol>
+  <div class="tip">Penukaran adalah keputusan manual Anda, jadi tidak dihitung
+    merugikan siapa pun. Antrian kembali berjalan normal pada undian
+    berikutnya.</div>
+  <div class="fo"><span>Mabyo v69</span><span>7</span></div>
+</section>
+
+<!-- ═══════════════════ 8. PERINGKAT + RIWAYAT ═══════════════════ -->
+<section class="page">
+  <div class="rh"><span><b>Mabyo</b> panduan host</span><span>Peringkat &amp; riwayat</span></div>
+  <p class="kicker">Mencatat skor</p>
+  <h1>Papan peringkat dan riwayat</h1>
+  <p class="lead">Dua tab yang menjawab dua pertanyaan yang ditanyakan orang
+     semalaman: “saya sudah main berapa kali?” dan “tadi siapa yang menang?”</p>
+
+  <div class="cols pair">
+    <div class="shot"><img src="shots/board.png" alt="Papan peringkat"></div>
+    <div class="shot"><img src="shots/history.png" alt="Riwayat"></div>
+  </div>
+
+  <ol class="steps-list" style="margin-top:7mm; columns:2; column-gap:9mm">
+    <li><b>Leaderboard</b>
+      <p>Kemenangan dan jumlah game semua yang hadir malam ini. Berguna untuk
+         menyelesaikan perdebatan dan melihat siapa yang terlalu lama
+         menunggu.</p></li>
+    <li><b>History</b>
+      <p>Semua pertandingan, terbaru di atas, lengkap dengan siapa di tiap
+         sisi.</p></li>
+    <li><b>Semua pertandingan bisa diedit</b>
+      <p>Bukan hanya yang terakhir. Ketuk pertandingan di <b>History</b> untuk
+         mengubah pemenang atau skor — papan peringkat ikut menyesuaikan.</p></li>
+    <li><b>Aman kalau halaman dimuat ulang</b>
+      <p>Data malam ini tersimpan di perangkat sambil berjalan. Menutup
+         browser atau kehabisan baterai tidak menghilangkan sesi.</p></li>
+  </ol>
+  <div class="fo"><span>Mabyo v69</span><span>8</span></div>
+</section>
+
+<!-- ═══════════════════ 9. PENGATURAN ═══════════════════ -->
+<section class="page">
+  <div class="rh"><span><b>Mabyo</b> panduan host</span><span>Pengaturan</span></div>
+  <p class="kicker">Atur sekali di awal</p>
+  <h1>Pengaturan yang perlu diketahui</h1>
+  <p class="lead">Sebagian besar hanya diatur pada malam pertama dan tidak
+     pernah disentuh lagi. Dua di antaranya mengubah jalannya seluruh malam.</p>
+
+  <div class="cols">
+    <div class="shot"><img src="shots/settings.png" alt="Pengaturan"></div>
+    <div class="steps">
+      <ol class="steps-list">
+        <li><b>Courts</b>
+          <p>Berapa lapangan yang Anda sewa. Bisa diubah di tengah sesi kalau
+             ada lapangan kosong — antrian menyesuaikan pada undian
+             berikutnya.</p></li>
+        <li><b>Scoring</b>
+          <p><b>Wins only</b> cukup satu ketukan per game. <b>Points</b> juga
+             menanyakan skor. Kebanyakan host memakai <b>Wins only</b>.</p></li>
+        <li><b>Level matching</b>
+          <p>Seberapa ketat Mabyo menjaga satu lapangan tetap satu level.
+             Pengaturan lebih longgar mengisi lapangan lebih cepat saat
+             peserta sedikit.</p></li>
+        <li><b>Clear tonight's list</b>
+          <p>Mengakhiri sesi dan mengosongkan daftar yang hadir — tetapi
+             <b>Roster history</b> tetap tersimpan, jadi minggu depan tetap
+             cepat.</p></li>
+      </ol>
+      <div class="warn">Menghapus tidak bisa dibatalkan. Mabyo bertanya dulu,
+        dan konfirmasinya menyebutkan berapa pemain yang akan dihapus.</div>
+    </div>
+  </div>
+  <div class="fo"><span>Mabyo v69</span><span>9</span></div>
+</section>
+
+<!-- ═══════════════════ 10. PASANG DI HOME SCREEN ═══════════════════ -->
+<section class="page">
+  <div class="rh"><span><b>Mabyo</b> panduan host</span><span>Pasang</span></div>
+  <p class="kicker">Lakukan sekali saja, di ponsel Anda</p>
+  <h1>Pasang Mabyo di Home Screen</h1>
+  <p class="lead">Mabyo berjalan di browser, tetapi memang dirancang untuk
+     dipasang. Menambahkannya ke Home Screen hanya butuh sekitar lima belas
+     detik dan membuatnya terasa seperti aplikasi biasa. Buka dulu
+     <span class="url">mabyo.pages.dev</span>, lalu ikuti ponsel Anda.</p>
+
+  <div class="two">
+    <!-- iPhone -->
+    <div class="half">
+      <h2>iPhone &amp; iPad</h2>
+      <p class="os">Wajib pakai <b>Safari</b>. Chrome di iPhone tidak bisa memasangnya.</p>
+      <ol>
+        <li>Buka <span class="url">mabyo.pages.dev</span> di <b>Safari</b>.</li>
+        <li>Ketuk tombol <b>Share</b>
+          <span class="gly" aria-hidden="true"><svg viewBox="0 0 24 24">
+            <path d="M12 16V4M12 4 8 8M12 4l4 4"/>
+            <path d="M5 13v6a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-6"/></svg></span>
+          — kotak dengan panah ke atas. Letaknya di <b>bawah</b> layar pada
+          iPhone, dan di <b>kanan atas</b> pada iPad.</li>
+        <li>Gulir ke bawah pada daftar abu-abu.</li>
+        <li>Ketuk <b>Add to Home Screen</b>
+          <span class="gly" aria-hidden="true"><svg viewBox="0 0 24 24">
+            <rect x="4" y="4" width="16" height="16" rx="3"/>
+            <path d="M12 9v6M9 12h6"/></svg></span>.</li>
+        <li>Ganti namanya kalau mau, lalu ketuk <b>Add</b> di kanan atas.</li>
+        <li>Tutup Safari. Mulai sekarang buka <b>Mabyo</b> dari Home Screen.</li>
+      </ol>
+    </div>
+
+    <!-- Android -->
+    <div class="half">
+      <h2>Android</h2>
+      <p class="os">Chrome, Edge maupun Samsung Internet sama-sama bisa.</p>
+      <ol>
+        <li>Buka <span class="url">mabyo.pages.dev</span> di <b>Chrome</b>.</li>
+        <li>Ketuk <b>menu</b>
+          <span class="gly" aria-hidden="true"><svg viewBox="0 0 24 24">
+            <circle cx="12" cy="5" r="1.4" fill="currentColor" stroke="none"/>
+            <circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>
+            <circle cx="12" cy="19" r="1.4" fill="currentColor" stroke="none"/></svg></span>
+          — tiga titik di <b>kanan atas</b>.</li>
+        <li>Ketuk <b>Add to Home screen</b>, atau <b>Install app</b> kalau itu
+          yang tertulis di ponsel Anda. Keduanya sama saja.</li>
+        <li>Ketuk <b>Install</b> atau <b>Add</b> untuk mengonfirmasi.</li>
+        <li>Sebagian ponsel menanyakan penempatan ikon — ketuk
+          <b>Add automatically</b>.</li>
+        <li>Mulai sekarang buka <b>Mabyo</b> dari home screen atau laci
+          aplikasi.</li>
+      </ol>
+    </div>
+  </div>
+
+  <div class="why">
+    <div class="w"><b>Layar lebih luas</b>
+      Tanpa bilah alamat dan tombol browser, Anda melihat dua sampai tiga baris
+      antrian lebih banyak di ponsel yang sama.</div>
+    <div class="w"><b>Tetap masuk</b>
+      Mabyo yang dipasang mempertahankan sesi jauh lebih lama. Tab browser yang
+      seminggu tidak dibuka bisa meminta Anda masuk lagi.</div>
+    <div class="w"><b>Sekali ketuk</b>
+      Tidak perlu mengetik alamat atau mencari-cari tab saat orang sudah
+      menunggu lapangan.</div>
+  </div>
+
+  <div class="note" style="margin-top:6mm"><b>Tidak ada yang diunduh dari
+    toko aplikasi.</b> Ikonnya adalah pintasan ke aplikasi web yang sama, jadi
+    pembaruan berjalan sendiri — Anda selalu memakai versi terbaru tanpa
+    melakukan apa pun.</div>
+  <div class="fo"><span>Mabyo v69</span><span>10</span></div>
+</section>
+
+<!-- ═══════════════════ 11. AKUN ANDA ═══════════════════ -->
+<section class="page">
+  <div class="rh"><span><b>Mabyo</b> panduan host</span><span>Akun Anda</span></div>
+  <p class="kicker">Masuk</p>
+  <h1>Akun Anda</h1>
+  <p class="lead">Akun Mabyo diberikan oleh penyelenggara, bukan daftar sendiri.
+     Anda seharusnya sudah menerima satu alamat email dan satu kata sandi.</p>
+
+  <div class="cols">
+    <div class="shot"><img src="shots/empty.png" alt="Sesi baru"></div>
+    <div class="steps">
+      <ol class="steps-list">
+        <li><b>Masuk sekali per perangkat</b>
+          <p>Mabyo mengingat Anda. Seharusnya tidak perlu mengetik kata sandi
+             lagi di ponsel itu.</p></li>
+        <li><b>Sesi tersimpan di ponsel Anda</b>
+          <p>Pemain, lapangan dan hasil malam ini disimpan di perangkat yang
+             Anda pakai. Menjadi host dari ponsel lain berarti memulai malam
+             yang terpisah.</p></li>
+        <li><b>Tetap jalan tanpa sinyal</b>
+          <p>Sinyal di GOR sering buruk. Mabyo tetap berjalan offline dan
+             menyusul sendiri begitu sinyal kembali.</p></li>
+        <li><b>Nomor build</b>
+          <p>Di kanan atas setiap layar — di sini <b>v69</b>. Kalau ada yang
+             aneh, kirim tangkapan layar; nomor itu menunjukkan versi yang
+             Anda pakai.</p></li>
+      </ol>
+      <div class="warn"><b>Jangan bagikan kata sandi Anda.</b> Satu akun untuk
+        satu host. Kalau ada orang lain yang perlu mengatur mabar sendiri,
+        mereka perlu akun sendiri.</div>
+    </div>
+  </div>
+  <div class="fo"><span>Mabyo v69</span><span>11</span></div>
+</section>
+
+<!-- ═══════════════════ 12. KALAU ADA MASALAH ═══════════════════ -->
+<section class="page">
+  <div class="rh"><span><b>Mabyo</b> panduan host</span><span>Mengatasi masalah</span></div>
+  <p class="kicker">Saat mabar berlangsung</p>
+  <h1>Kalau ada masalah</h1>
+  <p class="lead">Jawaban singkat untuk hal-hal yang benar-benar sering dialami
+     host, diurutkan sesuai seringnya terjadi.</p>
+
+  <ol class="steps-list" style="columns:2; column-gap:10mm; margin-top:2mm">
+    <li><b>Ada yang main padahal seharusnya tidak</b>
+      <p>Ketuk orangnya, lalu ketuk siapa yang seharusnya main. Lihat
+         halaman 7.</p></li>
+    <li><b>Saya salah simpan pemenang</b>
+      <p>Tekan <b>Undo</b> di notifikasi, atau perbaiki nanti dari tab
+         <b>History</b> — semua pertandingan bisa diedit, bukan hanya yang
+         terakhir.</p></li>
+    <li><b>Ada lapangan kosong</b>
+      <p>Biasanya karena pemain selevel belum cukup. Longgarkan <b>Level
+         matching</b> di <b>Settings</b>, atau cek berapa yang ditandai
+         <b>Away</b>.</p></li>
+    <li><b>Ada yang bilang sudah lama tidak main</b>
+      <p>Buka <b>See all waiting</b>. Antrian diurutkan ketat berdasarkan
+         jumlah game, jadi posisinya adalah jawaban yang jujur.</p></li>
+    <li><b>Layar ikut membesar saat saya ketuk kotak isian</b>
+      <p>Sudah diperbaiki di v69. Kalau masih terjadi, versi Anda masih versi
+         lama — tutup semua tab lalu buka lagi.</p></li>
+    <li><b>Saya diminta masuk lagi</b>
+      <p>Wajar kalau sekitar seminggu tidak dibuka lewat tab browser.
+         Memasangnya ke Home Screen sebagian besar mencegah ini — lihat
+         halaman 10.</p></li>
+    <li><b>Daftar terhapus tidak sengaja</b>
+      <p>Pemain malam ini hilang, tetapi <b>Roster history</b> masih menyimpan
+         semuanya beserta level. Tambahkan lagi dari sana.</p></li>
+    <li><b>Tidak ada yang termuat</b>
+      <p>Mabyo bisa jalan offline, jadi ini biasanya versi lama yang tersimpan.
+         Tutup semua tab Mabyo, buka lagi, lalu cek nomor build di kanan
+         atas.</p></li>
+  </ol>
+
+  <div class="tip" style="margin-top:8mm"><b>Masih bingung?</b> Kirimkan
+    penyelenggara Anda tangkapan layar seluruh layar. Nomor build di pojok
+    kanan atas adalah hal pertama yang akan mereka lihat.</div>
+  <div class="fo"><span>Mabyo v69</span><span>12</span></div>
+</section>
+</html>

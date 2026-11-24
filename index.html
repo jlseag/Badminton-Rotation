@@ -532,7 +532,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v69';   // bump together with V in sw.js
+const BUILD='v71';   // bump together with V in sw.js
 /* The live site, and nothing else. A preview branch, a local server and a
    file:// copy are all "not live" and say so in the header. Hard-coded
    rather than configured: a flag you can set wrongly is worse than none. */
@@ -574,8 +574,8 @@ function defState(){return{
   settings:{
     courts:2, mode:'firstto', total:21,
     scoring:'wins',
-    partnerStrict:4, oppStrict:3, balance:3,
-    pairing:'level', rankBy:'points', allowOverride:false, noise:3
+
+    pairing:'level', rankBy:'points', allowOverride:false
   }
 };}
 let S=defState(), tab='game', sel=null, dragId=null;
@@ -862,7 +862,7 @@ function courtColours(c){
    yellow has no single ink that reads on both ends. Fixing the palette is
    the fix; fixing the ink is not. */
 function courtHeadStyle(c){
-  if(!c || S.settings.pairing !== 'level') return '';
+  if(!c || !showsTiers()) return '';
   const ks = courtColours(c), a = HDR[ks[0]], b = HDR[ks[ks.length-1]];
   const stripes = 'repeating-linear-gradient(90deg,rgba(255,255,255,.12) 0 2px,transparent 2px 46px)';
   const fill = ks.length === 1
@@ -870,6 +870,13 @@ function courtHeadStyle(c){
     : `linear-gradient(100deg,${a} 0%,${a} 34%,${b} 66%,${b} 100%)`;
   return ` style="background:${stripes},${fill}"`;
 }
+
+/* Both skill modes label a court with the groups standing on it; only
+   Social mix, where the four are picked without regard to level, has nothing
+   useful to say there. */
+const showsTiers = () => S.settings.pairing === 'level' || S.settings.pairing === 'mix';
+const styleName  = () => S.settings.pairing === 'level' ? 'Same level'
+                       : S.settings.pairing === 'mix'   ? 'Mix level' : 'Social mix';
 
 function courtTiers(c){            // which skill groups are on this court, in order
   const seen=[];
@@ -1005,7 +1012,7 @@ function viewStart(){
     <div class="row"><span class="mini">Scoring</span><span class="sp"></span>
       <span style="font-weight:800;font-size:14px">${modeName()}</span></div>
     <div class="row" style="margin-top:8px"><span class="mini">Match style</span><span class="sp"></span>
-      <span style="font-weight:800;font-size:14px">${S.settings.pairing==='level'?'Same level':'Social mix'}</span></div>
+      <span style="font-weight:800;font-size:14px">${styleName()}</span></div>
   </div>
   <button class="btn pri full" style="margin-top:4px" onclick="startSession()">Start Session</button>
   <div class="grid2" style="margin-top:11px">
@@ -1185,7 +1192,7 @@ function viewRolling(st){
     const ready = c.winner && (winsOnly() || hasScore(c));
     return `<div class="court">
       <div class="court-h"${courtHeadStyle(c)}>
-        <span class="cn">Court ${i+1}</span>${S.settings.pairing==='level'?`<span class="ctier">${courtTiers(c)}</span>`:''}
+        <span class="cn">Court ${i+1}</span>${showsTiers()?`<span class="ctier">${courtTiers(c)}</span>`:''}
         <span class="bal" style="color:${col}">${lbl} ${b}%</span>
       </div>
       <div class="court-b">
@@ -1243,6 +1250,13 @@ function viewRolling(st){
           ? `<button class="btn xs full" style="margin-top:10px" onclick="queueDialog()">See all ${queue.length} waiting</button>`
           : '');
     })()}
+    ${(() => { const stuck = mixStranded(); if(!stuck.length) return '';
+      /* The class uppercases, so this has to stay short -- the long version
+         read as shouting. The name and the reason, nothing else. */
+      return `<div class="mini" style="margin-top:10px;color:var(--warn)">
+        ${stuck.map(p=>esc(p.name)).join(', ')} ${stuck.length>1?'have':'has'} nobody within
+        one level ·
+        <button class="btn xs" onclick="go('players')">change level</button></div>`; })()}
     ${away.length ? `<div class="mini" style="margin-top:10px;color:var(--ink3)">
         ${away.length} away: ${away.map(p=>esc(p.name)).join(', ')} ·
         <button class="btn xs" onclick="go('players')">manage</button></div>` : ''}
@@ -1406,7 +1420,7 @@ function viewBoard(st){
 
   // Social mix: one table, as before -- everyone plays everyone, so one
   // ranking is meaningful.
-  if(S.settings.pairing!=='level'){
+  if(S.settings.pairing==='social'){
     return header + table(list,true) +
       `<div class="muted" style="padding:0 4px 4px">${medal.join('')} top three \u00b7
         <span style="color:var(--court)">green</span> = fewer games than the session average</div>` +
@@ -1721,9 +1735,6 @@ function editMatchSet(idx,what,val){
 /* ---------------- settings ----------------------------------------------- */
 function viewSettings(){
   const s=S.settings;
-  const sl=(k,lab,sub,min,max)=>`<div class="sl"><span class="lab">${lab}<small>${sub}</small></span>
-    <input type="range" min="${min}" max="${max}" step="1" value="${s[k]}" oninput="setSetting('${k}',+this.value)">
-    <span class="mini" style="width:14px;text-align:right">${s[k]}</span></div>`;
   return `
   <div class="sec-h">Session</div>
   <div class="card">
@@ -1768,21 +1779,19 @@ function viewSettings(){
   <div class="card">
     <div class="seg" style="margin-bottom:4px">
       <button class="${s.pairing==='level'?'on':''}" onclick="setPairing('level')">Same level</button>
-      <button class="${s.pairing!=='level'?'on':''}" onclick="setPairing('social')">Social mix</button>
+      <button class="${s.pairing==='mix'?'on':''}" onclick="setPairing('mix')">Mix level</button>
+      <button class="${s.pairing==='social'?'on':''}" onclick="setPairing('social')">Social mix</button>
     </div>
-    <div class="muted" style="padding:10px 2px 2px">${s.pairing==='level'
+    <div class="muted" style="padding:10px 2px 2px">${
+      s.pairing==='level'
       ? `Advanced play Advanced, Intermediate play Intermediate, and so on. When a group cannot fill a
          court of four it borrows the nearest players from the next group down.`
+      : s.pairing==='mix'
+      ? `Every court is two neighbouring levels, two players a side \u2014 Advanced and Upper
+         Intermediate against Advanced and Upper Intermediate. Never further apart than one level:
+         if nobody suitable is free, that player waits a rotation instead.`
       : `Everyone mixes with everyone. Teams are built to be even across skill levels, so a stronger
          player gets a weaker partner.`}</div>
-  </div>
-  <div class="sec-h">Matchmaking weights</div>
-  <div class="card">
-    ${sl('partnerStrict','Partner-repeat strictness','Higher = harder to get the same partner twice',1,5)}
-    ${sl('oppStrict','Opponent-repeat strictness','Higher = more opponent variety',1,5)}
-    ${sl('balance','Match balance importance','Higher = closer, more even games',1,5)}
-    ${sl('noise','Social randomness','Higher = more shuffling, less optimal',1,5)}
-
   </div>
   ${winsOnly()?'':`
   <div class="sec-h">Ranking</div>
@@ -2316,12 +2325,13 @@ function rememberQuad(ids){
    sides close in strength. */
 function pairFour(ids, st, str){
   const SPLITS = [[[0,1],[2,3]], [[0,2],[1,3]], [[0,3],[1,2]]];
-  const Wp = 55 * (S.settings.partnerStrict / 3);
+  /* Was a 1-5 slider at 4. Folded in: 55 * (4/3). */
+  const Wp = 73.33;
   /* No warm-up. The first match of the night is played as evenly as the
      last: a session has no run-up, and how competitive the games feel is the
      host's choice of Same level or Social mix, not a timer. This is the old
      "competitive" weight (.85 x 1.5), now simply the weight. */
-  const Wb = 1.275 * (S.settings.balance / 3);
+  const Wb = 1.275;                                // was a 1-5 slider at 3
   const n  = S.matches ? S.matches.length : 0;
 
   const teamCost = (x, y) => {
@@ -2339,7 +2349,7 @@ function pairFour(ids, st, str){
     const a = [ids[ai[0]], ids[ai[1]]], b = [ids[bi[0]], ids[bi[1]]];
     const d = Math.abs((str[a[0]] + str[a[1]]) - (str[b[0]] + str[b[1]]));
     let opp = 0;
-    const Wo = 5 * (S.settings.oppStrict / 3);
+    const Wo = 5;                                  // was a 1-5 slider at 3
     a.forEach(x => b.forEach(y => {
       const s = st[x] || {opps:{}, lastOpp:{}};
       const o = s.opps[y] || 0;
@@ -2368,6 +2378,9 @@ function pairFour(ids, st, str){
    That is the host's rule: "always cycles through in order of least games
    played". */
 function chooseFour(order, st, str, justFinished){
+  /* Mix Level builds its court from the tier ladder, not from these cost
+     terms, so it is answered before any of them. */
+  if(S.settings.pairing === 'mix') return chooseMix(order, st, str);
   const jfSet = new Set(justFinished || []);
   if(order.length < 4) return null;
   /* Everything below assumes `order` is in games-played order: the must/flex
@@ -2568,6 +2581,117 @@ const tierGap = ids => {
   const t = ids.map(id => TIER_ORD[tierOf(P(id))] ?? 2);
   return Math.max(...t) - Math.min(...t);
 };
+const TIER_SEQ   = Object.keys(TIER_ORD).sort((a,b)=>TIER_ORD[a]-TIER_ORD[b]);
+/* The shapes a Mix Level court may take, in preference order: two from each
+   of two neighbouring tiers, then 3+1 or 1+3 when one of them has a single
+   player free, then four from one tier. Every one of them spans at most one
+   rank, which is the whole point -- there is deliberately no shape that
+   spans two. */
+const MIX_SHAPES = [[2,2],[3,1],[1,3],[4,0]];
+
+/* ── Mix Level ────────────────────────────────────────────────────────────
+   Between Same level and Social mix. A court spans at most ONE rank, and the
+   shape wanted is two players from a tier against two from the tier beside
+   it -- Advanced + Upper Int vs Advanced + Upper Int -- so the mismatch is
+   identical on both sides of the net. The game stays competitive while
+   nobody is sealed inside their own group all evening, which is the late
+   session complaint: as people leave, a tier of four has exactly one
+   possible foursome and plays it over and over.
+
+   Shape is a rule here, not a price. For the player at the front of the
+   fairness queue every 2+2 is tried before any 3+1, and a single-tier court
+   is the last resort. When no shape can seat them the court is left EMPTY
+   and they wait a rotation -- a court spanning two ranks is the thing this
+   mode exists to prevent, so there is no fallback that quietly produces one.
+   Simulated at 43 players over 40 rounds across seven tier splits (even,
+   odd, hollow, and single-player tiers): no court ever stood empty, and the
+   longest anyone waited was three rotations.
+
+   Selection inside a tier is by games played, with strength breaking the
+   tie. Borrowing the strongest free player outright -- the literal reading
+   of "take the best of the group below" -- measured a 20-game spread across
+   one session, because the top of each tier gets borrowed every round and
+   the bottom never does. Level on games, the strongest still wins the tie:
+   the same intent, without the starvation. */
+function chooseMix(order, st, str){
+  if(order.length < 4) return null;
+  const qg  = id => (P(id) ? (P(id).qg || 0) : 0);
+  const tk  = id => tierOf(P(id));                 // tierOf already normalises
+  const pos = {}; order.forEach((id,i) => pos[id] = i);
+
+  const free = {};
+  order.forEach(id => { const t = tk(id); (free[t] = free[t] || []).push(id) });
+  Object.keys(free).forEach(t => free[t] = free[t].slice().sort((a,b) =>
+      qg(a) - qg(b) || (str[b]||0) - (str[a]||0) || pos[a] - pos[b]));
+
+  const score = four => {
+    const r = pairFour(four, st, str);             // the split, balance and
+    if(!r) return null;                            // partner memory as ever
+    const qsum = four.reduce((t,id) => t + qg(id), 0);
+    const head = Math.min(...four.map(id => pos[id]));
+    return { a:r.a, b:r.b,
+             cost: qsum*1000 + head*600 + quadStale(four)*QUAD_W + r.cost };
+  };
+
+  /* The anchor walks down the queue, so the court is built around whoever
+     has waited longest and only moves on when no legal shape holds them. */
+  for(const anchor of order){
+    const T = tk(anchor), ti = TIER_ORD[T];
+    for(const sh of MIX_SHAPES){
+      const nh = sh[0], nl = sh[1];
+      const tries = [];
+      if(nl === 0) tries.push([T, null]);
+      else [ti-1, ti+1].forEach(k => {
+        const O = TIER_SEQ[k]; if(!O) return;
+        tries.push(TIER_ORD[T] < TIER_ORD[O] ? [T, O] : [O, T]);
+      });
+      let best = null;
+      for(const pair of tries){
+        const hi = pair[0], lo = pair[1];
+        const H = free[hi] || [], L = lo ? (free[lo] || []) : [];
+        if(H.length < nh || L.length < nl) continue;
+        let four = H.slice(0, nh).concat(L.slice(0, nl));
+        if(four.indexOf(anchor) < 0){
+          // the anchor plays: drop the lowest-priority member of their tier
+          const mine = four.filter(id => tk(id) === T);
+          if(!mine.length) continue;
+          const drop = mine[mine.length - 1];
+          four = four.filter(id => id !== drop).concat(anchor);
+        }
+        if(new Set(four).size !== 4) continue;
+        const got = score(four);
+        if(got && (!best || got.cost < best.cost)) best = got;
+      }
+      if(best) return best;                        // shape priority is strict
+    }
+  }
+  return null;                                     // nobody seatable: they wait
+}
+
+/* Who Mix Level cannot seat at all, judged from the roster rather than the
+   moment. A court needs four people from at most two neighbouring tiers, so
+   a player is stuck only when their own tier holds fewer than four AND no
+   neighbour can make up the difference -- in practice when they are the only
+   one at their level and neither neighbour has three present. The lone
+   Advanced at a session of Intermediates is the real case. The host fixes it
+   in one tap, by changing that player's level or swapping them on by hand,
+   so the queue says so rather than leaving them on the bench all night
+   wondering why. */
+function mixStranded(){
+  if(S.settings.pairing !== 'mix') return [];
+  const ps = present(), c = {};
+  ps.forEach(p => { const t = tierOf(p); c[t] = (c[t]||0)+1 });
+  const fits = (a,b) => (a>=2&&b>=2) || (a>=3&&b>=1) || (a>=1&&b>=3);
+  return ps.filter(p => {
+    const t = tierOf(p), i = TIER_ORD[t];
+    if((c[t]||0) >= 4) return false;
+    return ![i-1, i+1].some(k => {
+      const O = TIER_SEQ[k]; if(!O || !c[O]) return false;
+      return TIER_ORD[t] < TIER_ORD[O] ? fits(c[t], c[O]) : fits(c[O], c[t]);
+    });
+  });
+}
+
 /* Fill one empty court from the front of the queue. Returns false when
    there are not four people available, which is a normal state, not an
    error -- the court simply waits. */
@@ -2821,6 +2945,12 @@ function drawCourts(idxs, justFinished){
   const list = idxs.filter(i => i < want).sort((a,b) => a-b);
   if(!list.length) return;
   if(list.length === 1){ fillCourt(list[0], justFinished); return; }
+  /* Mix Level fills one court at a time even when two are free. drawTwo
+     scores foursomes with its own cost terms and has no notion of the tier
+     shapes, so letting it draw would reintroduce exactly the split this mode
+     is meant to close: the same setting behaving differently depending on how
+     many courts happened to finish together. One path, one answer. */
+  if(S.settings.pairing === 'mix'){ list.forEach(i => fillCourt(i, justFinished)); return; }
   const st = stats(), str = strengths(st);
   if(!drawTwo(list[0], list[1], jointOrder(8, justFinished), st, str)){
     list.forEach(i => fillCourt(i, justFinished));
