@@ -4,6 +4,7 @@
    hollow and single-player. */
 load('dev/harness.js');
 var A = makeApp();
+A.PREMIUM = true;                 // these suites exercise 8 courts
 var TIERS = ['adv','upp','int','beg','nwb'];
 
 function seed(counts, courts, mode){

@@ -38,6 +38,9 @@ function makeApp(){
 
   var expose = '\n;return {' +
     'get S(){return S}, set S(v){S=v},' +
+    /* The court cap is an entitlement, and a headless run has no account.
+       Tests say which tier they are exercising. */
+    'get PREMIUM(){return PREMIUM}, set PREMIUM(v){PREMIUM=v},' +
     'get sel(){return sel}, set sel(v){sel=v},' +
     'defState:defState, fillCourts:fillCourts, finishMatch:finishMatch, P:P,' +
     'stats:stats, strengths:strengths, present:present, tierOf:tierOf,' +

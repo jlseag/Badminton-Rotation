@@ -1,11 +1,11 @@
 /* Offline cache — the courts usually have worse signal than the car park. */
-const V = 'mabyo-v71';
+const V = 'mabyo-v72';
 
 // Note: './index.html' is deliberately NOT here. Cloudflare 308-redirects it
 // to './', and a redirected response used for a navigation is a hard error in
 // Safari — which is what broke the installed app on iOS. Cache the canonical
 // path only.
-const ASSETS = ['./', './manifest.json', './icon.png'];
+const ASSETS = ['./', './manifest.json', './icon.png', './privacy.html'];
 
 self.addEventListener('install', e => {
   e.waitUntil(
@@ -38,7 +38,13 @@ self.addEventListener('fetch', e => {
   // believes a stale "active" is an app that cannot be revoked.
   if (url.origin !== self.location.origin) return;
 
-  const navigation = e.request.mode === 'navigate';
+  /* The app is one page, so a navigation is normally a request for the app
+     shell whatever path was typed. privacy.html is the exception: it is a
+     real second page, and treating it as a navigation would serve the app
+     in its place -- a dead link, and Google's OAuth consent screen checks
+     that URL. Any further standalone page has to be added here too. */
+  const STANDALONE = /\/privacy\.html$/;
+  const navigation = e.request.mode === 'navigate' && !STANDALONE.test(url.pathname);
   // Navigations always ask for the canonical path, so the response can never
   // be a redirect. Page requests skip the HTTP cache so "network first"
   // really means the network.
