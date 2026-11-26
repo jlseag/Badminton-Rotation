@@ -567,7 +567,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v78';   // bump together with V in sw.js
+const BUILD='v79';   // bump together with V in sw.js
 /* The live site, and nothing else. A preview branch, a local server and a
    file:// copy are all "not live" and say so in the header. Hard-coded
    rather than configured: a flag you can set wrongly is worse than none.
@@ -3297,44 +3297,85 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
     }catch(_){ return null; }
   }
 
-  async function deviceLabel(){
+  /* Everything the dashboard knows about this device, in one pass.
+     Split into two kinds of signal, and the split is the whole point:
+
+       IDENTITY  what the device IS. Goes into the fingerprint, which is
+                 how the server recognises the phone after localStorage has
+                 been emptied.
+       DISPLAY   what it is useful to READ. Shown, never hashed.
+
+     The OS version is display only: an iOS update must not read as a new
+     phone. The installed flag is display only too -- on iOS a Home Screen
+     app gets its own storage container, so one phone registers twice, and
+     collapsing exactly that pair is what this is for. */
+  async function deviceInfo(){
     const u = navigator.userAgent;
-    let os = /iPhone/.test(u) ? 'iPhone' : /iPad/.test(u) ? 'iPad'
-           : /Android/.test(u) ? 'Android' : /Mac OS X/.test(u) ? 'Mac'
-           : /Windows/.test(u) ? 'Windows' : 'Other';
-    const br = /CriOS/.test(u) ? 'Chrome' : /FxiOS|Firefox/.test(u) ? 'Firefox'
+    let plat = /iPhone/.test(u) ? 'iPhone' : /iPad/.test(u) ? 'iPad'
+             : /Android/.test(u) ? 'Android' : /Mac OS X/.test(u) ? 'Mac'
+             : /Windows/.test(u) ? 'Windows' : 'Other';
+    const browser = /CriOS/.test(u) ? 'Chrome' : /FxiOS|Firefox/.test(u) ? 'Firefox'
              : /Edg/.test(u) ? 'Edge' : /Chrome/.test(u) ? 'Chrome'
              : /Safari/.test(u) ? 'Safari' : '';
-    let model = '', ver = '';
+    let model = '', osver = '';
 
     // Apple reports no model at all, so two iPhone 15s look identical here.
-    // The OS version and the screen size are the only things that ever
-    // differ between them, and only sometimes -- the short device code in
-    // the dashboard is what actually separates them.
     const m = u.match(/(?:iPhone |CPU )?OS (\d+)[_.](\d+)/);
-    if(m) ver = m[1] + '.' + m[2];
+    if(m) osver = m[1] + '.' + m[2];
 
     try{
       const uad = navigator.userAgentData;
       if(uad && uad.getHighEntropyValues){
         const h = await uad.getHighEntropyValues(['platform','platformVersion','model']);
-        if(h.platform) os = h.platform;
-        if(h.platformVersion) ver = String(h.platformVersion).split('.').slice(0,2).join('.');
+        if(h.platform) plat = h.platform;
+        if(h.platformVersion) osver = String(h.platformVersion).split('.').slice(0,2).join('.');
         if(h.model) model = h.model;
       }
     }catch(_){}
 
-    let size = '';
+    let screen_ = '', dpr = '';
     try{
       const w = Math.min(screen.width, screen.height), hh = Math.max(screen.width, screen.height);
-      if(w && hh) size = w + '×' + hh;
+      if(w && hh) screen_ = w + '×' + hh;
+      dpr = String(devicePixelRatio || '');
     }catch(_){}
 
-    const standalone = window.matchMedia &&
-      matchMedia('(display-mode: standalone)').matches ? 'installed' : '';
+    const installed = !!(window.matchMedia &&
+      matchMedia('(display-mode: standalone)').matches);
 
-    return [model, os + (ver ? ' ' + ver : ''), size, br, standalone]
-      .filter(Boolean).join(' · ');
+    let tz = '', cores = '', mem = '', depth = '';
+    try{ tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '' }catch(_){}
+    try{ cores = String(navigator.hardwareConcurrency || '') }catch(_){}
+    try{ mem = String(navigator.deviceMemory || '') }catch(_){}
+    try{ depth = String(screen.colorDepth || '') }catch(_){}
+
+    const fp = await hashFp([model, plat, screen_, dpr, browser,
+                             cores, mem, tz, depth, navigator.language||''].join('|'));
+
+    const label = [model, plat + (osver ? ' ' + osver : ''), screen_, browser,
+                   installed ? 'installed' : ''].filter(Boolean).join(' · ');
+    return { label, fp, plat, osver, screen:screen_, browser, installed };
+  }
+
+  /* SHA-256 where it exists. crypto.subtle needs a secure context, which a
+     file:// copy is not, so there is a plain fallback -- it only has to be
+     stable and well spread, not secret. The fingerprint is never a token:
+     it identifies a device to a host who already owns it. */
+  async function hashFp(str){
+    try{
+      if(crypto && crypto.subtle){
+        const b = new TextEncoder().encode(str);
+        const d = await crypto.subtle.digest('SHA-256', b);
+        return Array.from(new Uint8Array(d)).slice(0, 16)
+                    .map(x => x.toString(16).padStart(2,'0')).join('');
+      }
+    }catch(_){}
+    let h1 = 0x811c9dc5, h2 = 0x01000193;
+    for(let i = 0; i < str.length; i++){
+      h1 = Math.imul(h1 ^ str.charCodeAt(i), 0x01000193) >>> 0;
+      h2 = Math.imul(h2 + str.charCodeAt(i), 0x85ebca6b) >>> 0;
+    }
+    return 'f' + h1.toString(16).padStart(8,'0') + h2.toString(16).padStart(8,'0');
   }
 
   /* ── network helpers ──────────────────────────────────────────────── */
@@ -3417,11 +3458,16 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
     // Is THIS DEVICE still allowed? Asked every time the gate is considered,
     // so a removed device can never slip through on a quick re-login.
     try{
+      // Matched on key OR fingerprint, the same two ways device_touch()
+      // matches. Keying on device_key alone meant clearing site data
+      // handed back a clean slate at the one moment it matters most.
+      const fp = (await deviceInfo()).fp;
       const dq = await sbFetch('/rest/v1/devices?select=revoked&host_id=eq.' + A.id +
-                               '&device_key=eq.' + encodeURIComponent(deviceKey()));
+                               '&or=(device_key.eq.' + encodeURIComponent(deviceKey()) +
+                               ',fp.eq.' + encodeURIComponent(fp) + ')');
       if(dq.ok){
         const d = await dq.json().catch(() => null);
-        if(d && d[0] && d[0].revoked) return { state:'device_removed' };
+        if(d && d.some(x => x.revoked)) return { state:'device_removed' };
       }
     }catch(_){ /* offline: the heartbeat catches it when the signal returns */ }
 
@@ -3455,22 +3501,37 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
 
     const now = new Date().toISOString();
     try{
-      const dr = await sbFetch('/rest/v1/devices?on_conflict=host_id,device_key', {
+      /* One RPC, not an upsert, because the client must not be the thing
+         that decides what counts as the same device. The old upsert keyed
+         on (host_id, device_key), and device_key lives in localStorage --
+         so clearing site data, or installing to the Home Screen, or moving
+         to a new origin, minted a device_key the server had never seen and
+         the table grew a second row for the same phone. device_touch()
+         matches on device_key FIRST and falls back to the fingerprint, so
+         a phone that lost its key is recognised and its existing row is
+         updated, carrying revoked with it. Clearing storage no longer
+         escapes a removal, and it no longer spends a second device slot. */
+      const di = await deviceInfo();
+      const dr = await sbFetch('/rest/v1/rpc/device_touch', {
         method:'POST',
-        headers:{ Prefer:'resolution=merge-duplicates,return=representation' },
-        body: JSON.stringify({ host_id:A.id, device_key:deviceKey(),
-                               session_id:sessionId(),
-                               label:(await deviceLabel()), last_seen:now })
+        body: JSON.stringify({ p_device_key: deviceKey(), p_fp: di.fp,
+                               p_label: di.label, p_plat: di.plat,
+                               p_osver: di.osver, p_screen: di.screen,
+                               p_browser: di.browser, p_installed: di.installed,
+                               p_session_id: sessionId() })
       });
       // The row comes back, so the same request that says "still here" also
       // tells us whether we are still welcome. No extra round trip.
       if(dr.ok){
         const back = await dr.json().catch(() => null);
-        if(back && back[0] && back[0].revoked){ removedHere(); return; }
+        const r = Array.isArray(back) ? back[0] : back;
+        if(r && r.revoked){ removedHere(); return false; }
+        if(r && r.booted){ bootedHere(); return false; }
       }
       await sbFetch('/rest/v1/hosts?id=eq.'+A.id, {
         method:'PATCH', body: JSON.stringify({ last_seen_at: now }) });
     }catch(_){}
+    return true;
   }
 
   /* ── screens ──────────────────────────────────────────────────────── */
@@ -3507,6 +3568,34 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
   function removedHere(){
     lastTouch = 0;                       // so the next check is never skipped
     boot(false);                         // one road to the locked screen
+  }
+
+  /* The account is open on more devices than its cap allows, and this one
+     lost the slot. Deliberately NOT the same as a removal: nothing was
+     taken away, the newest device simply wins, and taking the slot back is
+     one tap. device_touch() un-boots whoever calls it, so the button is
+     just a touch -- and the other device finds out on its next heartbeat,
+     within a minute. The heartbeat here stops on its own while the locked
+     screen is up (it is gated on `gate.hidden`), so the two devices cannot
+     sit in a loop stealing the slot from each other. */
+  function bootedHere(){
+    lastTouch = 0;
+    showLocked('Signed in somewhere else',
+      'This account was just opened on another device. Only '+
+      'a limited number of devices can use it at a time.<br><br>'+
+      'Nothing here has been deleted — take the slot back and carry on, '+
+      'or leave it to the other device.', false);
+    $g('#gBody').insertAdjacentHTML('beforeend',
+      '<div class="gstack" style="margin-top:9px">'+
+      '<button type="button" id="gTake">Use this device</button></div>');
+    const b = $g('#gTake');
+    b.onclick = async () => {
+      b.disabled = true; b.textContent = 'Checking…';
+      lastTouch = 0;
+      const ok = await touch();
+      if(ok){ setGate(false); acctBtn.hidden = false; }
+      else { b.disabled = false; b.textContent = 'Use this device'; }
+    };
   }
 
   function signOut(){
