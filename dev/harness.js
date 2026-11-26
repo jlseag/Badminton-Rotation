@@ -46,6 +46,11 @@ function makeApp(){
     'stats:stats, strengths:strengths, present:present, tierOf:tierOf,' +
     'TIER_ORD:TIER_ORD, TIER_SEQ:TIER_SEQ, chooseMix:chooseMix, mixStranded:mixStranded,' +
     'queueOrder:queueOrder, sortByTier:sortByTier, tierGap:tierGap,' +
+    /* nextTeams + savedPanel let a test choose WHEN the draw fires, which is
+       the whole question: finishing a court draws it at once today. */
+    'nextTeams:nextTeams, drawCourts:drawCourts, holdMatch:holdMatch,' +
+    'drawLabel:drawLabel, othersPlaying:othersPlaying, sweptWith:sweptWith,' +
+    'get savedPanel(){return savedPanel}, set savedPanel(v){savedPanel=v},' +
     'activeCourts:activeCourts, fillCourt:fillCourt, drawCourts:drawCourts };';
 
   var f = new Function('window','document','localStorage','navigator','location',

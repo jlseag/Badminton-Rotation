@@ -254,6 +254,8 @@ nav button.on{color:var(--court);background:rgba(14,138,79,.11)}
 /* ---------- courts ---------- */
 .court{background:var(--card);border:2px solid var(--line);border-radius:var(--r);overflow:hidden;
   margin-bottom:14px;box-shadow:var(--shadow)}
+.cgame{font-size:11px;font-weight:700;opacity:.72;margin-left:7px;
+  letter-spacing:.02em;white-space:nowrap}
 .court.locked{border-color:var(--court);box-shadow:0 0 0 3px rgba(14,138,79,.13),var(--shadow)}
 .court-h{display:flex;flex-wrap:wrap;align-items:center;gap:0 8px;padding:11px 14px;color:#fff;
   background:repeating-linear-gradient(90deg,rgba(255,255,255,.12) 0 2px,transparent 2px 46px),
@@ -547,7 +549,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v75';   // bump together with V in sw.js
+const BUILD='v76';   // bump together with V in sw.js
 /* The live site, and nothing else. A preview branch, a local server and a
    file:// copy are all "not live" and say so in the header. Hard-coded
    rather than configured: a flag you can set wrongly is worse than none. */
@@ -1214,7 +1216,9 @@ function viewRolling(st){
     const ready = c.winner && (winsOnly() || hasScore(c));
     return `<div class="court">
       <div class="court-h"${courtHeadStyle(c)}>
-        <span class="cn">Court ${i+1}</span>${showsTiers()?`<span class="ctier">${courtTiers(c)}</span>`:''}
+        <span class="cn">Court ${i+1}</span><span class="cgame">Game ${
+          (S.matches||[]).filter(m => m.court === i+1).length + 1
+        }</span>${showsTiers()?`<span class="ctier">${courtTiers(c)}</span>`:''}
         <span class="bal" style="color:${col}">${lbl} ${b}%</span>
       </div>
       <div class="court-b">
@@ -1228,9 +1232,14 @@ function viewRolling(st){
              </div>`
           : `${winsOnly()?'':scoreUI(c,i)}
              <button class="btn pri full" style="margin-top:12px" onclick="finishMatch(${i})" ${ready?'':'disabled'}>
-               ${ready ? 'Next teams'
+               ${ready ? drawLabel(i)
                        : (winsOnly() ? 'Tap the winner' : 'Pick a winner and score')}</button>
-             <button class="btn gho full" style="margin-top:8px" onclick="cancelResult(${i})">← Back</button>`}
+             <div class="row" style="gap:8px;margin-top:8px">
+               <button class="btn gho" style="flex:1 1 0;min-width:0" onclick="cancelResult(${i})">← Back</button>
+               ${ready && othersPlaying(i)
+                 ? `<button class="btn gho" style="flex:1 1 0;min-width:0" onclick="holdMatch(${i})">Wait for other courts</button>`
+                 : ''}
+             </div>`}
       </div>
     </div>`;
   };
@@ -1248,7 +1257,9 @@ function viewRolling(st){
       <span><b>${label}</b> ${ns.length>1?'are':'is'} free${
         queue.length >= 4 ? '' : ' \u00b7 needs 4 players'}</span>
       ${queue.length >= 4
-        ? `<button class="btn sm" onclick="nextTeams(${pending[0]})">Next teams</button>` : ''}
+        ? `<button class="btn sm" onclick="nextTeams(${pending[0]})">${
+             ns.length > 1 ? 'Generate teams for Courts ' + courtList(pending) : 'Next teams'
+           }</button>` : ''}
     </div>`;
   })();
 
@@ -2796,6 +2807,77 @@ function fillCourts(justFinished){
 
 /* A court is done: record it, send those four to the back of the queue,
    and refill that court straight away. */
+/* Which courts a draw started here would sweep in: every court already
+   standing free, plus this one. nextTeams() has always drawn them together
+   -- the button simply never said so, which is why a host could not tell
+   that waiting bought her anything. */
+function sweptWith(i){
+  const want = activeCourts();
+  const free = Object.keys(savedPanel).map(Number)
+    .filter(n => n < want && !(S.courts||[])[n] && n !== i);
+  return free.concat(i).sort((a,b) => a-b);
+}
+function courtList(ns){
+  const l = ns.map(n => n + 1);
+  return l.length > 1 ? l.slice(0,-1).join(', ') + ' & ' + l[l.length-1] : String(l[0]);
+}
+function drawLabel(i){
+  const all = sweptWith(i);
+  return all.length > 1 ? 'Generate teams for Courts ' + courtList(all) : 'Next teams';
+}
+/* Waiting for nobody is a dead end, so the button only exists while another
+   court is still playing. */
+function othersPlaying(i){
+  const want = activeCourts();
+  return (S.courts || []).some((c, n) => c && n < want && n !== i);
+}
+
+/* The result, written down. Both paths below need exactly this; the only
+   difference between them is whether a draw follows. */
+function recordMatch(i){
+  const c = S.courts[i];
+  if(!c) return null;
+  if(!c.winner || (!winsOnly() && !hasScore(c))){
+    toast(winsOnly()?'Tap the winning team':'Enter a winner and score for this court', 1);
+    return null; }
+
+  S.matches = S.matches || [];
+  S.matches.push({
+    at: Date.now(), court: i + 1,
+    a: [...c.a], b: [...c.b],
+    winner: c.winner, winScore: c.winScore, loseScore: lossOf(c)
+  });
+
+  const played = [...c.a, ...c.b];
+  const n = S.matches.length;
+  played.forEach(id => {
+    const p = P(id);
+    if(p){ p.qg = (p.qg || 0) + 1; p.lastPlayed = n; }
+  });
+
+  S.courts[i] = null;
+  sel = null;
+  return { idx: n - 1, played, won: teamName(c.winner === 'a' ? c.a : c.b) };
+}
+
+/* Record, and leave the court empty on purpose.
+   Three courts finishing a minute apart are drawn one at a time today, and
+   the first to finish takes the four that suit it while the others get the
+   leftovers -- first come, first served on the waiting queue. Simulated at
+   40 players on 6 courts: drawing them together lifts the LEAST-mixed
+   player from 9.4 opponents to 14.0 in Social mix. It is worth much less in
+   Mix level, where the shape rules already constrain the draw, which is
+   exactly why this is a button the host presses when it suits her rather
+   than a setting she has to reason about in advance. */
+function holdMatch(i){
+  const r = recordMatch(i);
+  if(!r) return;
+  savedPanel[i] = { idx: r.idx, played: r.played, held: true };
+  render();
+  toast(r.won + ' won \u00b7 Court ' + (i+1) + ' waiting', 0,
+        { label:'Undo', fn:() => undoMatch(r.idx, i) });
+}
+
 function finishMatch(i){
   const c = S.courts[i];
   if(!c) return;
