@@ -254,6 +254,8 @@ nav button.on{color:var(--court);background:rgba(14,138,79,.11)}
 /* ---------- courts ---------- */
 .court{background:var(--card);border:2px solid var(--line);border-radius:var(--r);overflow:hidden;
   margin-bottom:14px;box-shadow:var(--shadow)}
+.cgame{font-size:11px;font-weight:700;opacity:.72;margin-left:7px;
+  letter-spacing:.02em;white-space:nowrap}
 .court.locked{border-color:var(--court);box-shadow:0 0 0 3px rgba(14,138,79,.13),var(--shadow)}
 .court-h{display:flex;flex-wrap:wrap;align-items:center;gap:0 8px;padding:11px 14px;color:#fff;
   background:repeating-linear-gradient(90deg,rgba(255,255,255,.12) 0 2px,transparent 2px 46px),
@@ -467,6 +469,21 @@ html.gated body{padding-bottom:0}
   background:var(--ground);border:none;color:var(--ink2);font:inherit;font-size:12px;
   font-weight:800;letter-spacing:.05em;padding:9px 11px;border-radius:9px;cursor:pointer}
 #gEye:active{background:var(--line)}
+.gsell{list-style:none;margin:0 0 16px;padding:0;text-align:left}
+.gsell li{position:relative;padding-left:20px;margin:7px 0;font-size:13.5px;color:var(--ink2);line-height:1.45}
+.gsell li::before{content:"";position:absolute;left:4px;top:7px;width:7px;height:7px;
+  border-radius:50%;background:var(--court)}
+.gbtn-g{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;
+  min-height:48px;border-radius:12px;background:#fff;color:#1f2328;font-weight:700;
+  font-size:14.5px;border:2px solid var(--line);border-bottom-width:4px}
+.gbtn-g:active{border-bottom-width:2px;transform:translateY(2px)}
+.gbtn-g svg{flex:0 0 auto}
+/* `hidden` is an attribute selector and loses to the class above, so the
+   fallback button stayed visible beside Google's once GSI rendered and the
+   gate offered two sign-in buttons. Specificity, not logic. */
+.gbtn-g[hidden]{display:none}
+#gsiWrap{display:flex;justify-content:center}
+#gsiWrap:not(:empty){margin-bottom:2px}
 /* 35px tall reads right beside a 44px field, but a thumb needs 44. Grown
    downward and upward only: the field's padding-right already keeps the two
    apart sideways, and reaching sideways would steal taps from the input. */
@@ -497,20 +514,20 @@ html.gated body{padding-bottom:0}
     <img class="gshut" src="./icon.png" alt="Mabyo" width="64" height="64">
     <div id="gBody">
       <h1 class="gtitle">Mabyo</h1>
-      <p class="gsub">Sign in to start a session.</p>
+      <p class="gsub">Atur rotasi mabar tanpa ribet.</p>
+      <ul class="gsell">
+        <li>Rotasi pemain otomatis &mdash; yang paling sedikit main, duluan</li>
+        <li>Match style bisa diatur &mdash; Same level, Mix level, atau Social mix</li>
+        <li>Poin dan leaderboard jalan sendiri</li>
+        <li>Host tetap pegang kendali &mdash; tukar pemain kapan aja</li>
+      </ul>
       <div id="gErr"></div>
-      <form id="gForm" autocomplete="on">
-        <div class="gfield"><label for="gEmail">Email</label>
-          <input id="gEmail" type="email" autocomplete="username"
-                 autocapitalize="off" autocorrect="off" required></div>
-        <div class="gfield"><label for="gPass">Password</label>
-          <div class="gpwwrap">
-            <input id="gPass" type="password" autocomplete="current-password" required>
-            <button type="button" id="gEye">SHOW</button>
-          </div></div>
-        <button id="gBtn" type="submit">Sign in</button>
-      </form>
-      <p class="gnote">Accounts are issued by the organiser.<br>Contact them if you need access.</p>
+      <div id="gsiWrap"></div>
+      <button type="button" id="gGoogle" class="gbtn-g">
+        <svg width="17" height="17" viewBox="0 0 48 48" aria-hidden="true"><path fill="#4285F4" d="M45.1 24.5c0-1.6-.1-3.2-.4-4.7H24v8.9h11.8c-.5 2.7-2 5-4.4 6.6v5.500h7.1c4.1-3.8 6.6-9.4 6.6-16.3z"/><path fill="#34A853" d="M24 46c5.9 0 10.9-2 14.5-5.3l-7.1-5.5c-2 1.3-4.5 2.1-7.4 2.1-5.7 0-10.5-3.8-12.2-9H4.5v5.7C8.1 41.2 15.4 46 24 46z"/><path fill="#FBBC05" d="M11.8 28.3c-.4-1.3-.7-2.7-.7-4.3s.3-3 .7-4.3v-5.7H4.5C2.9 17.2 2 20.5 2 24s.9 6.8 2.5 10l7.3-5.7z"/><path fill="#EA4335" d="M24 10.7c3.2 0 6.1 1.1 8.4 3.3l6.3-6.3C34.9 4.1 29.9 2 24 2 15.4 2 8.1 6.8 4.5 14l7.3 5.7c1.7-5.2 6.5-9 12.2-9z"/></svg>
+        Lanjut dengan Google</button>
+      <p class="gnote">Gratis untuk 2 lapangan. Hubungi organiser untuk premium.</p>
+      <p class="gnote" style="margin-top:4px"><a href="./privacy.html" style="color:inherit">Kebijakan privasi</a></p>
       <p class="gnote" id="gBuild" style="margin-top:6px;opacity:.65;font-size:11.5px"></p>
     </div>
   </div>
@@ -532,11 +549,17 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v71';   // bump together with V in sw.js
+const BUILD='v77';   // bump together with V in sw.js
 /* The live site, and nothing else. A preview branch, a local server and a
    file:// copy are all "not live" and say so in the header. Hard-coded
    rather than configured: a flag you can set wrongly is worse than none. */
 const IS_LIVE = location.hostname === 'mabyo.pages.dev';
+/* Access used to be a door: premium in, everyone else out. It is a ceiling
+   now. Anyone signed in may run a session; a free account is capped at
+   FREE_COURTS and the organiser lifts it. Set by checkAccess, read by
+   activeCourts -- the one place every court count passes through. */
+let PREMIUM = false;
+const FREE_COURTS = 2;
 /* A preview branch is a public URL serving a complete, working copy of the
    app. Nothing extra is exposed by it -- same anon key, same RLS, the
    server-side rules are what actually guard the data -- but it should not
@@ -806,7 +829,8 @@ function strengths(st){
    Courts in Settings is a MAXIMUM; we only use as many as the players here
    can fill four to a court. */
 function activeCourts(){
-  return clamp(Math.min(S.settings.courts,Math.floor(present().length/4)),0,20);
+  const cap = PREMIUM ? 20 : FREE_COURTS;
+  return clamp(Math.min(S.settings.courts, cap, Math.floor(present().length/4)), 0, 20);
 }
 
 /* The court header takes the colour of the levels playing on it. A green bar
@@ -1163,19 +1187,27 @@ function viewRolling(st){
   /* A court the draw could not fill -- either fewer than four free, or the
      clique guard holding it so the groups mix. It keeps a card with a button
      so the host is never looking at an empty court she cannot act on. */
-  const heldCard = i => `<div class="court held">
+  const heldCard = i => {
+    /* Two reasons a court sits empty, and they are not the same thing.
+       The host PRESSED "Wait for other courts" -- telling her the clique
+       guard is holding it answers a question she did not ask. */
+    const mine = !!(savedPanel[i] && savedPanel[i].held);
+    const enough = queue.length >= 4;
+    const title = !enough ? 'Waiting for players'
+                : mine    ? 'Waiting for other courts'
+                          : 'Waiting to mix';
+    const body  = !enough ? 'A court needs four free players.'
+                : mine    ? 'Held so it can be drawn together with the next court to finish — one pool, better spread.'
+                          : 'Everyone free has just played here together. It fills when another court finishes, so the groups mix.';
+    return `<div class="court held">
       <div class="court-h"><span class="cn">Court ${i+1}</span>
         <span class="bal" style="color:var(--acc)">waiting</span></div>
       <div class="court-b">
-        <div class="empty" style="padding:20px 10px">
-          <b>${queue.length >= 4 ? 'Waiting to mix' : 'Waiting for players'}</b>
-          ${queue.length >= 4
-            ? 'Everyone free has just played here together. It fills when another court finishes, so the groups mix.'
-            : 'A court needs four free players.'}
-        </div>
-        ${queue.length >= 4
+        <div class="empty" style="padding:20px 10px"><b>${title}</b>${body}</div>
+        ${enough
           ? `<button class="btn pri full" style="margin-top:4px" onclick="nextTeams(${i})">Draw now</button>` : ''}
       </div></div>`;
+  };
 
   const courtCard = (c, i) => {
     if(!c){
@@ -1192,7 +1224,9 @@ function viewRolling(st){
     const ready = c.winner && (winsOnly() || hasScore(c));
     return `<div class="court">
       <div class="court-h"${courtHeadStyle(c)}>
-        <span class="cn">Court ${i+1}</span>${showsTiers()?`<span class="ctier">${courtTiers(c)}</span>`:''}
+        <span class="cn">Court ${i+1}</span><span class="cgame">Game ${
+          (S.matches||[]).filter(m => m.court === i+1).length + 1
+        }</span>${showsTiers()?`<span class="ctier">${courtTiers(c)}</span>`:''}
         <span class="bal" style="color:${col}">${lbl} ${b}%</span>
       </div>
       <div class="court-b">
@@ -1206,9 +1240,14 @@ function viewRolling(st){
              </div>`
           : `${winsOnly()?'':scoreUI(c,i)}
              <button class="btn pri full" style="margin-top:12px" onclick="finishMatch(${i})" ${ready?'':'disabled'}>
-               ${ready ? 'Next teams'
+               ${ready ? drawLabel(i)
                        : (winsOnly() ? 'Tap the winner' : 'Pick a winner and score')}</button>
-             <button class="btn gho full" style="margin-top:8px" onclick="cancelResult(${i})">← Back</button>`}
+             <div class="row" style="gap:8px;margin-top:8px">
+               <button class="btn gho" style="flex:1 1 0;min-width:0" onclick="cancelResult(${i})">← Back</button>
+               ${ready && othersPlaying(i)
+                 ? `<button class="btn gho" style="flex:1 1 0;min-width:0" onclick="holdMatch(${i})">Wait for other courts</button>`
+                 : ''}
+             </div>`}
       </div>
     </div>`;
   };
@@ -1226,7 +1265,9 @@ function viewRolling(st){
       <span><b>${label}</b> ${ns.length>1?'are':'is'} free${
         queue.length >= 4 ? '' : ' \u00b7 needs 4 players'}</span>
       ${queue.length >= 4
-        ? `<button class="btn sm" onclick="nextTeams(${pending[0]})">Next teams</button>` : ''}
+        ? `<button class="btn sm" onclick="nextTeams(${pending[0]})">${
+             ns.length > 1 ? 'Generate teams for Courts ' + courtList(pending) : 'Next teams'
+           }</button>` : ''}
     </div>`;
   })();
 
@@ -1738,8 +1779,13 @@ function viewSettings(){
   return `
   <div class="sec-h">Session</div>
   <div class="card">
-    <div class="sl"><span class="lab">Courts available<small>A maximum — only as many as your players can fill, four each</small></span>
-      <input type="number" min="1" max="12" value="${s.courts}" onchange="setSetting('courts',clamp(+this.value||1,1,12))"></div>
+    <div class="sl"><span class="lab">Courts available<small>${PREMIUM
+        ? 'A maximum — only as many as your players can fill, four each'
+        : 'Free accounts run up to '+FREE_COURTS+' courts'}</small></span>
+      <input type="number" min="1" max="${PREMIUM?12:FREE_COURTS}" value="${Math.min(s.courts,PREMIUM?12:FREE_COURTS)}"
+        onchange="setSetting('courts',clamp(+this.value||1,1,${PREMIUM?12:FREE_COURTS}))"></div>
+    ${PREMIUM ? '' : `<div class="muted" style="padding:10px 2px 0">
+      Akun gratis bisa pakai ${FREE_COURTS} lapangan. Hubungi organiser untuk buka lebih banyak.</div>`}
     <button class="btn dan full" style="margin-top:14px" onclick="newSession()">Start a new session</button>
     <button class="btn dan full" style="margin-top:10px" onclick="hardReset()">Reset everything</button>
   </div>
@@ -2769,6 +2815,77 @@ function fillCourts(justFinished){
 
 /* A court is done: record it, send those four to the back of the queue,
    and refill that court straight away. */
+/* Which courts a draw started here would sweep in: every court already
+   standing free, plus this one. nextTeams() has always drawn them together
+   -- the button simply never said so, which is why a host could not tell
+   that waiting bought her anything. */
+function sweptWith(i){
+  const want = activeCourts();
+  const free = Object.keys(savedPanel).map(Number)
+    .filter(n => n < want && !(S.courts||[])[n] && n !== i);
+  return free.concat(i).sort((a,b) => a-b);
+}
+function courtList(ns){
+  const l = ns.map(n => n + 1);
+  return l.length > 1 ? l.slice(0,-1).join(', ') + ' & ' + l[l.length-1] : String(l[0]);
+}
+function drawLabel(i){
+  const all = sweptWith(i);
+  return all.length > 1 ? 'Generate teams for Courts ' + courtList(all) : 'Next teams';
+}
+/* Waiting for nobody is a dead end, so the button only exists while another
+   court is still playing. */
+function othersPlaying(i){
+  const want = activeCourts();
+  return (S.courts || []).some((c, n) => c && n < want && n !== i);
+}
+
+/* The result, written down. Both paths below need exactly this; the only
+   difference between them is whether a draw follows. */
+function recordMatch(i){
+  const c = S.courts[i];
+  if(!c) return null;
+  if(!c.winner || (!winsOnly() && !hasScore(c))){
+    toast(winsOnly()?'Tap the winning team':'Enter a winner and score for this court', 1);
+    return null; }
+
+  S.matches = S.matches || [];
+  S.matches.push({
+    at: Date.now(), court: i + 1,
+    a: [...c.a], b: [...c.b],
+    winner: c.winner, winScore: c.winScore, loseScore: lossOf(c)
+  });
+
+  const played = [...c.a, ...c.b];
+  const n = S.matches.length;
+  played.forEach(id => {
+    const p = P(id);
+    if(p){ p.qg = (p.qg || 0) + 1; p.lastPlayed = n; }
+  });
+
+  S.courts[i] = null;
+  sel = null;
+  return { idx: n - 1, played, won: teamName(c.winner === 'a' ? c.a : c.b) };
+}
+
+/* Record, and leave the court empty on purpose.
+   Three courts finishing a minute apart are drawn one at a time today, and
+   the first to finish takes the four that suit it while the others get the
+   leftovers -- first come, first served on the waiting queue. Simulated at
+   40 players on 6 courts: drawing them together lifts the LEAST-mixed
+   player from 9.4 opponents to 14.0 in Social mix. It is worth much less in
+   Mix level, where the shape rules already constrain the draw, which is
+   exactly why this is a button the host presses when it suits her rather
+   than a setting she has to reason about in advance. */
+function holdMatch(i){
+  const r = recordMatch(i);
+  if(!r) return;
+  savedPanel[i] = { idx: r.idx, played: r.played, held: true };
+  render();
+  toast(r.won + ' won \u00b7 Court ' + (i+1) + ' waiting', 0,
+        { label:'Undo', fn:() => undoMatch(r.idx, i) });
+}
+
 function finishMatch(i){
   const c = S.courts[i];
   if(!c) return;
@@ -3248,8 +3365,10 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
       rows = await r.json();
     }catch(_){
       // Offline, or the server is unreachable. Fall back to what we last knew.
-      if(C && C.allowed && (Date.now() - C.checkedAt) < GRACE_DAYS*864e5)
+      if(C && C.allowed && (Date.now() - C.checkedAt) < GRACE_DAYS*864e5){
+        PREMIUM = !!C.premium;                 // last known, until signal returns
         return { state:'ok', offline:true };
+      }
       if(C && C.allowed) return { state:'grace_over' };
       return { state:'offline_unknown' };
     }
@@ -3257,16 +3376,23 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
     const row = rows[0];
     if(!row) return { state:'no_account' };
 
-    const live = !row.suspended
-      && (row.plan === 'trial' || row.plan === 'active')
+    /* Two different questions, which used to be one.
+       `allowed`  -- may this person open the app at all? Anyone not
+                     suspended may. A free account is a customer who has
+                     not paid yet, not a stranger.
+       `premium`  -- may they have more than FREE_COURTS courts?
+       Conflating them is what made `free` mean "locked out", and it is why
+       a signup funnel was impossible: there was nowhere for a new account
+       to land except a wall. */
+    const paid = (row.plan === 'trial' || row.plan === 'active')
       && (!row.expires_at || new Date(row.expires_at).getTime() > Date.now());
 
-    C = { allowed:live, plan:row.plan, expires_at:row.expires_at,
-          suspended:row.suspended, checkedAt:Date.now() };
+    C = { allowed: !row.suspended, premium: paid, plan:row.plan,
+          expires_at:row.expires_at, suspended:row.suspended, checkedAt:Date.now() };
     write('badminton_ent_v1', C);
+    PREMIUM = paid;
 
     if(row.suspended) return { state:'suspended' };
-    if(!live)         return { state:'lapsed', plan:row.plan };
 
     // Is THIS DEVICE still allowed? Asked every time the gate is considered,
     // so a removed device can never slip through on a quick re-login.
@@ -3334,7 +3460,7 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
     gBody.innerHTML = SIGNIN_HTML;
     if(msg) $g('#gErr').innerHTML = '<div class="gerr">'+msg+'</div>';
     setGate(true); acctBtn.hidden = true;
-    wireForm();
+    wireGate();
   }
 
   function showLocked(title, body, showRetry){
@@ -3389,6 +3515,146 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
       matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
     el.textContent = (typeof BUILD === 'string' ? BUILD : '?') +
       ' \u00b7 ' + (standalone ? 'installed' : 'browser');
+  }
+
+  /* Google comes back with the tokens in the URL fragment. Done by hand
+     against GoTrue's REST API because the whole app is, and pulling in
+     supabase-js for one redirect would cost more than it saves. The hash is
+     wiped immediately: an access token has no business sitting in the
+     address bar, in history, or in a link the host pastes to someone. */
+  async function consumeOAuthHash(){
+    const h = location.hash || '';
+    if(h.indexOf('access_token=') < 0) return false;
+    const q = new URLSearchParams(h.slice(1));
+    const at = q.get('access_token'), rt = q.get('refresh_token');
+    history.replaceState(null, '', location.pathname + location.search);
+    if(!at) return false;
+    try{
+      const r = await fetch(SUPA+'/auth/v1/user',
+        { headers:{ apikey:PKEY, Authorization:'Bearer '+at } });
+      if(!r.ok) throw new Error('http '+r.status);
+      const u = await r.json();
+      A = { access_token:at, refresh_token:rt,
+            expires_at: Date.now() + (+q.get('expires_in') || 3600)*1000,
+            id:u.id, email:u.email };
+      write(AUTH_LS, A);
+      const last = localStorage.getItem('badminton_last_email');
+      if(last && last !== A.email) drop('badminton_rotation_v1');
+      try{ localStorage.setItem('badminton_last_email', A.email) }catch(_){}
+      return true;
+    }catch(_){ return false; }
+  }
+
+  function startGoogle(){
+    const back = location.origin + location.pathname;
+    location.href = SUPA + '/auth/v1/authorize?provider=google&redirect_to='
+      + encodeURIComponent(back);
+  }
+
+  /* ── Sign in with Google, without leaving the page ───────────────────
+     The redirect flow sends the browser to the Supabase host and back, and
+     Google names whichever host owns the redirect_uri. Hosts therefore saw
+     "Sign in to ubgabydmcjwqfsffvwoz.supabase.co" -- which reads like a
+     phishing page to somebody who arrived from an advert ninety seconds
+     ago, and that is the one moment the app has to look trustworthy.
+     Supabase can change that host, for ten dollars a month.
+
+     Google Identity Services keeps the whole exchange here: Google hands
+     this page an ID token, and GoTrue's id_token grant turns it into a
+     session. There is no redirect, so there is no foreign host for Google
+     to name -- the consent belongs to this origin and the client called
+     "Mabyo".
+
+     It also removes a second problem. A redirect out of an INSTALLED iOS
+     web app opens a system browser sheet that does not reliably return to
+     the app, and the guide tells every host to install to the Home Screen.
+     Staying in the page sidesteps that entirely.
+
+     startGoogle() stays as the fallback. The script below is third party
+     and is blocked often enough -- strict privacy modes, content blockers,
+     some corporate networks -- that a sign-in button which silently does
+     nothing is not an acceptable failure. */
+  const GOOGLE_CLIENT_ID =
+    '697229206061-uvss2o0loa20iqteh8ssq02m23h291ht.apps.googleusercontent.com';
+
+  /* Google signs the SHA-256 of the nonce; GoTrue wants the raw one and
+     hashes it itself to check the two agree. Sending the same string to
+     both fails, confusingly, as an invalid token rather than a bad nonce. */
+  async function makeNonce(){
+    const raw = (crypto.randomUUID ? crypto.randomUUID()
+                 : String(Date.now()) + Math.random());
+    const buf = await crypto.subtle.digest('SHA-256',
+                  new TextEncoder().encode(raw));
+    const hashed = [...new Uint8Array(buf)]
+      .map(b => b.toString(16).padStart(2,'0')).join('');
+    return { raw, hashed };
+  }
+
+  function loadGsi(){
+    return new Promise((ok, fail) => {
+      if(window.google && google.accounts && google.accounts.id) return ok();
+      const el = document.createElement('script');
+      el.src = 'https://accounts.google.com/gsi/client';
+      el.async = true;
+      el.onload = ok;
+      el.onerror = () => fail(new Error('blocked'));
+      document.head.appendChild(el);
+      setTimeout(() => fail(new Error('timeout')), 6000);
+    });
+  }
+
+  async function sessionFromIdToken(idToken, nonce){
+    const r = await fetch(SUPA + '/auth/v1/token?grant_type=id_token', {
+      method:'POST',
+      headers:{ apikey:PKEY, 'Content-Type':'application/json' },
+      body: JSON.stringify({ provider:'google', id_token:idToken, nonce })
+    });
+    const j = await r.json();
+    if(!r.ok) throw new Error(j.error_description || j.msg || 'Could not sign in.');
+    A = { access_token:j.access_token, refresh_token:j.refresh_token,
+          expires_at: Date.now() + (j.expires_in || 3600)*1000,
+          id:j.user.id, email:j.user.email };
+    write(AUTH_LS, A);
+    // A different host on this phone starts with a clean sheet.
+    const last = localStorage.getItem('badminton_last_email');
+    if(last && last !== A.email) drop('badminton_rotation_v1');
+    try{ localStorage.setItem('badminton_last_email', A.email) }catch(_){}
+    await boot(true);
+  }
+
+  async function initGsi(){
+    const wrap = $g('#gsiWrap');
+    if(!wrap) return false;
+    await loadGsi();
+    const n = await makeNonce();
+    google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      nonce: n.hashed,
+      use_fedcm_for_prompt: true,
+      callback: async res => {
+        const err = $g('#gErr'); if(err) err.innerHTML = '';
+        try{ await sessionFromIdToken(res.credential, n.raw); }
+        catch(e){
+          if(err) err.innerHTML = '<div class="gerr">'+
+            String(e.message).replace(/[<>]/g,'')+'</div>';
+        }
+      }
+    });
+    google.accounts.id.renderButton(wrap, {
+      type:'standard', theme:'outline', size:'large',
+      shape:'pill', text:'continue_with', logo_alignment:'center', width:260
+    });
+    return true;
+  }
+
+  function wireGate(){
+    stampBuild();
+    const gg = $g('#gGoogle'); if(gg) gg.onclick = startGoogle;
+    /* Only one button should be visible. The redirect one is hidden the
+       moment Google's own renders, and stays if it never does. */
+    initGsi().then(done => { if(done && gg) gg.hidden = true })
+             .catch(() => {});
+    wireForm();
   }
 
   function wireForm(){
@@ -3458,10 +3724,6 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
         showLocked('Access paused',
           'Your account has been paused by the organiser. Your players and history are safe — contact them to restore access.', true);
         break;
-      case 'lapsed':
-        showLocked('Subscription ended',
-          'This account no longer has an active plan. Contact the organiser to renew — nothing has been deleted.', true);
-        break;
       case 'grace_over':
         showLocked('Connect to continue',
           'The app has been offline for more than '+GRACE_DAYS+' days and needs to check your plan once. Find signal or wifi and try again.', true);
@@ -3491,8 +3753,8 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
   });
   addEventListener('online', () => { if(A) boot(false); });
 
-  wireForm();
-  boot(true);
+  wireGate();
+  consumeOAuthHash().then(() => boot(true));
 })();
 </script>
 </body>
