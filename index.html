@@ -476,6 +476,10 @@ html.gated body{padding-bottom:0}
   font-size:14.5px;border:2px solid var(--line);border-bottom-width:4px}
 .gbtn-g:active{border-bottom-width:2px;transform:translateY(2px)}
 .gbtn-g svg{flex:0 0 auto}
+/* `hidden` is an attribute selector and loses to the class above, so the
+   fallback button stayed visible beside Google's once GSI rendered and the
+   gate offered two sign-in buttons. Specificity, not logic. */
+.gbtn-g[hidden]{display:none}
 #gsiWrap{display:flex;justify-content:center}
 #gsiWrap:not(:empty){margin-bottom:2px}
 /* 35px tall reads right beside a 44px field, but a thumb needs 44. Grown
@@ -542,7 +546,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v73';   // bump together with V in sw.js
+const BUILD='v74';   // bump together with V in sw.js
 /* The live site, and nothing else. A preview branch, a local server and a
    file:// copy are all "not live" and say so in the header. Hard-coded
    rather than configured: a flag you can set wrongly is worse than none. */
