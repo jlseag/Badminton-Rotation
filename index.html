@@ -476,6 +476,8 @@ html.gated body{padding-bottom:0}
   font-size:14.5px;border:2px solid var(--line);border-bottom-width:4px}
 .gbtn-g:active{border-bottom-width:2px;transform:translateY(2px)}
 .gbtn-g svg{flex:0 0 auto}
+#gsiWrap{display:flex;justify-content:center}
+#gsiWrap:not(:empty){margin-bottom:2px}
 /* 35px tall reads right beside a 44px field, but a thumb needs 44. Grown
    downward and upward only: the field's padding-right already keeps the two
    apart sideways, and reaching sideways would steal taps from the input. */
@@ -513,6 +515,7 @@ html.gated body{padding-bottom:0}
         <li>Poin dan leaderboard ikut jalan</li>
       </ul>
       <div id="gErr"></div>
+      <div id="gsiWrap"></div>
       <button type="button" id="gGoogle" class="gbtn-g">
         <svg width="17" height="17" viewBox="0 0 48 48" aria-hidden="true"><path fill="#4285F4" d="M45.1 24.5c0-1.6-.1-3.2-.4-4.7H24v8.9h11.8c-.5 2.7-2 5-4.4 6.6v5.500h7.1c4.1-3.8 6.6-9.4 6.6-16.3z"/><path fill="#34A853" d="M24 46c5.9 0 10.9-2 14.5-5.3l-7.1-5.5c-2 1.3-4.5 2.1-7.4 2.1-5.7 0-10.5-3.8-12.2-9H4.5v5.7C8.1 41.2 15.4 46 24 46z"/><path fill="#FBBC05" d="M11.8 28.3c-.4-1.3-.7-2.7-.7-4.3s.3-3 .7-4.3v-5.7H4.5C2.9 17.2 2 20.5 2 24s.9 6.8 2.5 10l7.3-5.7z"/><path fill="#EA4335" d="M24 10.7c3.2 0 6.1 1.1 8.4 3.3l6.3-6.3C34.9 4.1 29.9 2 24 2 15.4 2 8.1 6.8 4.5 14l7.3 5.7c1.7-5.2 6.5-9 12.2-9z"/></svg>
         Lanjut dengan Google</button>
@@ -539,7 +542,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v72';   // bump together with V in sw.js
+const BUILD='v73';   // bump together with V in sw.js
 /* The live site, and nothing else. A preview branch, a local server and a
    file:// copy are all "not live" and say so in the header. Hard-coded
    rather than configured: a flag you can set wrongly is worse than none. */
@@ -3453,9 +3456,109 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
       + encodeURIComponent(back);
   }
 
+  /* ── Sign in with Google, without leaving the page ───────────────────
+     The redirect flow sends the browser to the Supabase host and back, and
+     Google names whichever host owns the redirect_uri. Hosts therefore saw
+     "Sign in to ubgabydmcjwqfsffvwoz.supabase.co" -- which reads like a
+     phishing page to somebody who arrived from an advert ninety seconds
+     ago, and that is the one moment the app has to look trustworthy.
+     Supabase can change that host, for ten dollars a month.
+
+     Google Identity Services keeps the whole exchange here: Google hands
+     this page an ID token, and GoTrue's id_token grant turns it into a
+     session. There is no redirect, so there is no foreign host for Google
+     to name -- the consent belongs to this origin and the client called
+     "Mabyo".
+
+     It also removes a second problem. A redirect out of an INSTALLED iOS
+     web app opens a system browser sheet that does not reliably return to
+     the app, and the guide tells every host to install to the Home Screen.
+     Staying in the page sidesteps that entirely.
+
+     startGoogle() stays as the fallback. The script below is third party
+     and is blocked often enough -- strict privacy modes, content blockers,
+     some corporate networks -- that a sign-in button which silently does
+     nothing is not an acceptable failure. */
+  const GOOGLE_CLIENT_ID =
+    '697229206061-uvss2o0loa20iqteh8ssq02m23h291ht.apps.googleusercontent.com';
+
+  /* Google signs the SHA-256 of the nonce; GoTrue wants the raw one and
+     hashes it itself to check the two agree. Sending the same string to
+     both fails, confusingly, as an invalid token rather than a bad nonce. */
+  async function makeNonce(){
+    const raw = (crypto.randomUUID ? crypto.randomUUID()
+                 : String(Date.now()) + Math.random());
+    const buf = await crypto.subtle.digest('SHA-256',
+                  new TextEncoder().encode(raw));
+    const hashed = [...new Uint8Array(buf)]
+      .map(b => b.toString(16).padStart(2,'0')).join('');
+    return { raw, hashed };
+  }
+
+  function loadGsi(){
+    return new Promise((ok, fail) => {
+      if(window.google && google.accounts && google.accounts.id) return ok();
+      const el = document.createElement('script');
+      el.src = 'https://accounts.google.com/gsi/client';
+      el.async = true;
+      el.onload = ok;
+      el.onerror = () => fail(new Error('blocked'));
+      document.head.appendChild(el);
+      setTimeout(() => fail(new Error('timeout')), 6000);
+    });
+  }
+
+  async function sessionFromIdToken(idToken, nonce){
+    const r = await fetch(SUPA + '/auth/v1/token?grant_type=id_token', {
+      method:'POST',
+      headers:{ apikey:PKEY, 'Content-Type':'application/json' },
+      body: JSON.stringify({ provider:'google', id_token:idToken, nonce })
+    });
+    const j = await r.json();
+    if(!r.ok) throw new Error(j.error_description || j.msg || 'Could not sign in.');
+    A = { access_token:j.access_token, refresh_token:j.refresh_token,
+          expires_at: Date.now() + (j.expires_in || 3600)*1000,
+          id:j.user.id, email:j.user.email };
+    write(AUTH_LS, A);
+    // A different host on this phone starts with a clean sheet.
+    const last = localStorage.getItem('badminton_last_email');
+    if(last && last !== A.email) drop('badminton_rotation_v1');
+    try{ localStorage.setItem('badminton_last_email', A.email) }catch(_){}
+    await boot(true);
+  }
+
+  async function initGsi(){
+    const wrap = $g('#gsiWrap');
+    if(!wrap) return false;
+    await loadGsi();
+    const n = await makeNonce();
+    google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      nonce: n.hashed,
+      use_fedcm_for_prompt: true,
+      callback: async res => {
+        const err = $g('#gErr'); if(err) err.innerHTML = '';
+        try{ await sessionFromIdToken(res.credential, n.raw); }
+        catch(e){
+          if(err) err.innerHTML = '<div class="gerr">'+
+            String(e.message).replace(/[<>]/g,'')+'</div>';
+        }
+      }
+    });
+    google.accounts.id.renderButton(wrap, {
+      type:'standard', theme:'outline', size:'large',
+      shape:'pill', text:'continue_with', logo_alignment:'center', width:260
+    });
+    return true;
+  }
+
   function wireGate(){
     stampBuild();
     const gg = $g('#gGoogle'); if(gg) gg.onclick = startGoogle;
+    /* Only one button should be visible. The redirect one is hidden the
+       moment Google's own renders, and stays if it never does. */
+    initGsi().then(done => { if(done && gg) gg.hidden = true })
+             .catch(() => {});
     /* The password form is preview-only. Live is Google and nothing else --
        that is the point of the change -- but a preview nobody can sign in to
        cannot be reviewed, so dev keeps the old door. */
