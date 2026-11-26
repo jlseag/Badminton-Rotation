@@ -1,5 +1,5 @@
 /* Offline cache — the courts usually have worse signal than the car park. */
-const V = 'mabyo-v74';
+const V = 'mabyo-v75';
 
 // Note: './index.html' is deliberately NOT here. Cloudflare 308-redirects it
 // to './', and a redirected response used for a navigation is a hard error in
@@ -43,7 +43,12 @@ self.addEventListener('fetch', e => {
      real second page, and treating it as a navigation would serve the app
      in its place -- a dead link, and Google's OAuth consent screen checks
      that URL. Any further standalone page has to be added here too. */
-  const STANDALONE = /\/privacy\.html$/;
+  /* Cloudflare Pages serves clean URLs, so a link to ./privacy.html is
+     answered at /privacy -- which this pattern missed, and the navigation
+     branch below then served the APP in the privacy page's place. Google's
+     consent screen checks that exact URL, so a dead link here is not
+     cosmetic. Match both spellings. */
+  const STANDALONE = /\/privacy(\.html)?$/;
   const navigation = e.request.mode === 'navigate' && !STANDALONE.test(url.pathname);
   // Navigations always ask for the canonical path, so the response can never
   // be a redirect. Page requests skip the HTTP cache so "network first"

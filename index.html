@@ -514,9 +514,10 @@ html.gated body{padding-bottom:0}
       <h1 class="gtitle">Mabyo</h1>
       <p class="gsub">Atur rotasi mabar tanpa ribet.</p>
       <ul class="gsell">
-        <li>Antrian otomatis &mdash; yang paling sedikit main, duluan</li>
-        <li>Tim dibagi sendiri, sesuai level pemain</li>
-        <li>Poin dan leaderboard ikut jalan</li>
+        <li>Rotasi pemain otomatis &mdash; yang paling sedikit main, duluan</li>
+        <li>Match style bisa diatur &mdash; Same level, Mix level, atau Social mix</li>
+        <li>Poin dan leaderboard jalan sendiri</li>
+        <li>Host tetap pegang kendali &mdash; tukar pemain kapan aja</li>
       </ul>
       <div id="gErr"></div>
       <div id="gsiWrap"></div>
@@ -546,7 +547,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v74';   // bump together with V in sw.js
+const BUILD='v75';   // bump together with V in sw.js
 /* The live site, and nothing else. A preview branch, a local server and a
    file:// copy are all "not live" and say so in the header. Hard-coded
    rather than configured: a flag you can set wrongly is worse than none. */
@@ -3563,26 +3564,7 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
        moment Google's own renders, and stays if it never does. */
     initGsi().then(done => { if(done && gg) gg.hidden = true })
              .catch(() => {});
-    /* The password form is preview-only. Live is Google and nothing else --
-       that is the point of the change -- but a preview nobody can sign in to
-       cannot be reviewed, so dev keeps the old door. */
-    if(!IS_LIVE) addPreviewSignIn();
     wireForm();
-  }
-
-  function addPreviewSignIn(){
-    const body = $g('#gBody'); if(!body || $g('#gForm')) return;
-    const d = document.createElement('div');
-    d.innerHTML =
-      '<p class="gnote" style="margin-top:14px;opacity:.7">preview only — password sign-in</p>'+
-      '<form id="gForm" autocomplete="on">'+
-      '<div class="gfield"><label for="gEmail">Email</label>'+
-      '<input id="gEmail" type="email" autocomplete="username" autocapitalize="off" required></div>'+
-      '<div class="gfield"><label for="gPass">Password</label>'+
-      '<div class="gpwwrap"><input id="gPass" type="password" autocomplete="current-password" required>'+
-      '<button type="button" id="gEye">SHOW</button></div></div>'+
-      '<button id="gBtn" type="submit">Sign in</button></form>';
-    body.appendChild(d);
   }
 
   function wireForm(){
