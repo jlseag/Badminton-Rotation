@@ -549,7 +549,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v76';   // bump together with V in sw.js
+const BUILD='v77';   // bump together with V in sw.js
 /* The live site, and nothing else. A preview branch, a local server and a
    file:// copy are all "not live" and say so in the header. Hard-coded
    rather than configured: a flag you can set wrongly is worse than none. */
@@ -1187,19 +1187,27 @@ function viewRolling(st){
   /* A court the draw could not fill -- either fewer than four free, or the
      clique guard holding it so the groups mix. It keeps a card with a button
      so the host is never looking at an empty court she cannot act on. */
-  const heldCard = i => `<div class="court held">
+  const heldCard = i => {
+    /* Two reasons a court sits empty, and they are not the same thing.
+       The host PRESSED "Wait for other courts" -- telling her the clique
+       guard is holding it answers a question she did not ask. */
+    const mine = !!(savedPanel[i] && savedPanel[i].held);
+    const enough = queue.length >= 4;
+    const title = !enough ? 'Waiting for players'
+                : mine    ? 'Waiting for other courts'
+                          : 'Waiting to mix';
+    const body  = !enough ? 'A court needs four free players.'
+                : mine    ? 'Held so it can be drawn together with the next court to finish — one pool, better spread.'
+                          : 'Everyone free has just played here together. It fills when another court finishes, so the groups mix.';
+    return `<div class="court held">
       <div class="court-h"><span class="cn">Court ${i+1}</span>
         <span class="bal" style="color:var(--acc)">waiting</span></div>
       <div class="court-b">
-        <div class="empty" style="padding:20px 10px">
-          <b>${queue.length >= 4 ? 'Waiting to mix' : 'Waiting for players'}</b>
-          ${queue.length >= 4
-            ? 'Everyone free has just played here together. It fills when another court finishes, so the groups mix.'
-            : 'A court needs four free players.'}
-        </div>
-        ${queue.length >= 4
+        <div class="empty" style="padding:20px 10px"><b>${title}</b>${body}</div>
+        ${enough
           ? `<button class="btn pri full" style="margin-top:4px" onclick="nextTeams(${i})">Draw now</button>` : ''}
       </div></div>`;
+  };
 
   const courtCard = (c, i) => {
     if(!c){
