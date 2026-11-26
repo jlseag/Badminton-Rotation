@@ -12,6 +12,24 @@
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" href="icon.png">
 <link rel="apple-touch-icon" href="icon.png">
+<script>
+/* One address, decided before a pixel is drawn.
+   mabyo.pages.dev cannot be deleted -- Cloudflare assigns it to the project
+   for as long as the project exists -- so it is sent here instead. Leaving
+   both live is not a tidiness problem: browser storage is per ORIGIN, so a
+   host who opened one and then the other would find an empty app, no
+   roster, and a phone registering as a second device. Two of everything,
+   one person.
+
+   The match is EXACT. dev.mabyo.pages.dev is the preview and must keep
+   working; a "not mabyo.id, so redirect" test would bounce it to production
+   and leave nowhere to test anything. The hash is carried over because an
+   OAuth redirect returns its tokens in one, and replace() is used so the
+   old address leaves no entry in the back button. */
+if (location.hostname === 'mabyo.pages.dev')
+  location.replace('https://mabyo.id' + location.pathname
+                   + location.search + location.hash);
+</script>
 <style>
 /* Fonts are embedded, not fetched. The app must render correctly at a sports hall
    with no signal, weeks after it was last opened. Nunito is a variable face
@@ -549,11 +567,13 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v77';   // bump together with V in sw.js
+const BUILD='v78';   // bump together with V in sw.js
 /* The live site, and nothing else. A preview branch, a local server and a
    file:// copy are all "not live" and say so in the header. Hard-coded
-   rather than configured: a flag you can set wrongly is worse than none. */
-const IS_LIVE = location.hostname === 'mabyo.pages.dev';
+   rather than configured: a flag you can set wrongly is worse than none.
+   mabyo.pages.dev was this until v78 and now redirects here, so it never
+   reaches this line; dev.mabyo.pages.dev still does, and is still preview. */
+const IS_LIVE = location.hostname === 'mabyo.id';
 /* Access used to be a door: premium in, everyone else out. It is a ceiling
    now. Anyone signed in may run a session; a free account is capped at
    FREE_COURTS and the organiser lifts it. Set by checkAccess, read by
