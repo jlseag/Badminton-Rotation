@@ -567,7 +567,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v82';   // bump together with V in sw.js
+const BUILD='v83';   // bump together with V in sw.js
 /* The live site, and nothing else. A preview branch, a local server and a
    file:// copy are all "not live" and say so in the header. Hard-coded
    rather than configured: a flag you can set wrongly is worse than none.
@@ -1806,11 +1806,9 @@ function viewSettings(){
   <div class="card">
     <div class="sl"><span class="lab">Courts available<small>${PREMIUM
         ? 'A maximum — only as many as your players can fill, four each'
-        : 'Free accounts run up to '+FREE_COURTS+' courts'}</small></span>
+        : 'Free accounts run up to '+FREE_COURTS+' courts \u2014 ask the organiser for more'}</small></span>
       <input type="number" min="1" max="${PREMIUM?12:FREE_COURTS}" value="${Math.min(s.courts,PREMIUM?12:FREE_COURTS)}"
         onchange="setSetting('courts',clamp(+this.value||1,1,${PREMIUM?12:FREE_COURTS}))"></div>
-    ${PREMIUM ? '' : `<div class="muted" style="padding:10px 2px 0">
-      Akun gratis bisa pakai ${FREE_COURTS} lapangan. Hubungi organiser untuk buka lebih banyak.</div>`}
     <button class="btn dan full" style="margin-top:14px" onclick="newSession()">Start a new session</button>
     <button class="btn dan full" style="margin-top:10px" onclick="hardReset()">Reset everything</button>
   </div>
