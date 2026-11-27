@@ -567,7 +567,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v81';   // bump together with V in sw.js
+const BUILD='v82';   // bump together with V in sw.js
 /* The live site, and nothing else. A preview branch, a local server and a
    file:// copy are all "not live" and say so in the header. Hard-coded
    rather than configured: a flag you can set wrongly is worse than none.
@@ -3467,12 +3467,19 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
       // matches. Keying on device_key alone meant clearing site data
       // handed back a clean slate at the one moment it matters most.
       const fp = (await deviceInfo()).fp;
-      const dq = await sbFetch('/rest/v1/devices?select=revoked&host_id=eq.' + A.id +
+      const dq = await sbFetch('/rest/v1/devices?select=revoked,booted&host_id=eq.' + A.id +
                                '&or=(device_key.eq.' + encodeURIComponent(deviceKey()) +
                                ',fp.eq.' + encodeURIComponent(fp) + ')');
       if(dq.ok){
         const d = await dq.json().catch(() => null);
         if(d && d.some(x => x.revoked)) return { state:'device_removed' };
+        /* Asked HERE, not in the heartbeat, because the heartbeat runs after
+           openApp() has already pulled the gate down: the app painted in
+           full, then the locked screen slammed over it a moment later. One
+           flash of someone else's roster is one too many. The heartbeat
+           still reports a boot that happens while the app is open -- that
+           is a different moment and the gate is legitimately down for it. */
+        if(d && d.length && d.every(x => x.booted)) return { state:'device_booted' };
       }
     }catch(_){ /* offline: the heartbeat catches it when the signal returns */ }
 
@@ -3590,6 +3597,7 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
   });
 
   /* ── background bookkeeping (never blocks the UI) ──────────────────── */
+  let freshSignIn = false;   // set by a completed sign-in, read once by boot()
   let lastTouch = 0;
   async function touch(reclaim){
     if(!A) return;
@@ -3660,13 +3668,13 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
     wireGate();
   }
 
-  function showLocked(title, body, showRetry){
+  function showLocked(title, body, showRetry, outLabel){
     gBody.innerHTML =
       '<h1 class="gtitle">'+title+'</h1>'+
       '<p class="gsub">'+body+'</p>'+
       '<div class="gstack">'+
         (showRetry ? '<button type="button" id="gRetry">Try again</button>' : '')+
-        '<button type="button" id="gOut">Sign out</button>'+
+        '<button type="button" id="gOut">'+(outLabel || 'Sign out')+'</button>'+
       '</div>';
     setGate(true); acctBtn.hidden = true;
     const rt = $g('#gRetry'); if(rt) rt.onclick = () => boot(true);
@@ -3675,7 +3683,9 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
 
   function openApp(){
     setGate(false); acctBtn.hidden = false;
-    touch();
+    /* Never a reclaim: by now boot() has done it if a sign-in earned it.
+       A bare reload must not take the slot back, or the cap means nothing. */
+    touch(false);
     rosterPull();
   }
 
@@ -3689,30 +3699,25 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
 
   /* The account is open on more devices than its cap allows, and this one
      lost the slot. Deliberately NOT the same as a removal: nothing was
-     taken away, the newest device simply wins, and taking the slot back is
-     one tap. Only that tap reclaims: an ordinary heartbeat REPORTS the
-     boot and changes nothing, so two devices cannot sit in a loop silently
-     stealing the slot back off each other -- which is what v80 did, in
-     place of ever kicking anyone out. The other device finds out on its
-     next heartbeat, within a minute. */
+     taken away, the newest device simply wins.
+
+     Taking the slot back is a full sign-in, not a button. Opening the
+     account on a second device IS the decision to use that device, so the
+     one it displaced should not be able to snatch it back with one tap --
+     that is how two phones spend an evening trading the slot. Signing in
+     again is deliberate, it goes through Google, and it proves whoever is
+     holding this device is still entitled to the account. The sign-in's
+     own first heartbeat carries the reclaim, so there is no second step
+     and no way to land straight back on this screen. */
   function bootedHere(){
     lastTouch = 0;
+    freshSignIn = false;
     showLocked('Signed in somewhere else',
-      'This account was just opened on another device. Only '+
-      'a limited number of devices can use it at a time.<br><br>'+
-      'Nothing here has been deleted — take the slot back and carry on, '+
-      'or leave it to the other device.', false);
-    $g('#gBody').insertAdjacentHTML('beforeend',
-      '<div class="gstack" style="margin-top:9px">'+
-      '<button type="button" id="gTake">Use this device</button></div>');
-    const b = $g('#gTake');
-    b.onclick = async () => {
-      b.disabled = true; b.textContent = 'Checking…';
-      lastTouch = 0;
-      const ok = await touch(true);
-      if(ok){ setGate(false); acctBtn.hidden = false; }
-      else { b.disabled = false; b.textContent = 'Use this device'; }
-    };
+      'This account was just opened on another device, and only a limited '+
+      'number of devices can use it at a time.<br><br>'+
+      'Nothing here has been deleted. Sign in again to bring the account '+
+      'back to this device, or leave it to the other one.',
+      false, 'Sign in again');
   }
 
   function signOut(){
@@ -3766,7 +3771,7 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
       A = { access_token:at, refresh_token:rt,
             expires_at: Date.now() + (+q.get('expires_in') || 3600)*1000,
             id:u.id, email:u.email };
-      write(AUTH_LS, A);
+      write(AUTH_LS, A); freshSignIn = true;
       const last = localStorage.getItem('badminton_last_email');
       if(last && last !== A.email) drop('badminton_rotation_v1');
       try{ localStorage.setItem('badminton_last_email', A.email) }catch(_){}
@@ -3843,7 +3848,7 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
     A = { access_token:j.access_token, refresh_token:j.refresh_token,
           expires_at: Date.now() + (j.expires_in || 3600)*1000,
           id:j.user.id, email:j.user.email };
-    write(AUTH_LS, A);
+    write(AUTH_LS, A); freshSignIn = true;
     // A different host on this phone starts with a clean sheet.
     const last = localStorage.getItem('badminton_last_email');
     if(last && last !== A.email) drop('badminton_rotation_v1');
@@ -3914,7 +3919,7 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
         A = { access_token:j.access_token, refresh_token:j.refresh_token,
               expires_at: Date.now() + (j.expires_in||3600)*1000,
               id:j.user.id, email:j.user.email };
-        write(AUTH_LS, A);
+        write(AUTH_LS, A); freshSignIn = true;
 
         // A different host on this phone starts with a clean sheet -- the
         // previous roster belongs to the previous account, not to them.
@@ -3936,6 +3941,12 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
     A = read(AUTH_LS); C = read('badminton_ent_v1');
     if(!A){ showSignIn(''); return; }
 
+    /* A completed sign-in IS the decision to use this device, so it takes
+       the slot back before anything is judged. Doing it the other way round
+       would have checkAccess() see the boot this sign-in is undoing, and
+       send the host back to the very screen they just signed in from. */
+    if(freshSignIn){ freshSignIn = false; await touch(true); }
+
     const res = await checkAccess();
     switch(res.state){
       case 'ok':
@@ -3943,6 +3954,9 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
           load(); render();
         }
         openApp();
+        break;
+      case 'device_booted':
+        bootedHere();
         break;
       case 'device_removed':
         showLocked('This device was removed',
