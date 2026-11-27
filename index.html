@@ -567,13 +567,25 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v83';   // bump together with V in sw.js
+const BUILD='v84';   // bump together with V in sw.js
 /* The live site, and nothing else. A preview branch, a local server and a
    file:// copy are all "not live" and say so in the header. Hard-coded
    rather than configured: a flag you can set wrongly is worse than none.
    mabyo.pages.dev was this until v78 and now redirects here, so it never
    reaches this line; dev.mabyo.pages.dev still does, and is still preview. */
-const IS_LIVE = location.hostname === 'mabyo.id';
+/* Previews are NAMED. The test used to be "is this mabyo.id?", so every
+   other origin -- a per-commit preview, a URL nobody had thought of --
+   was silently exempt from the heartbeat, the device cap and the roster
+   sync. That is a free, invisible session for anyone who finds one, and
+   the list of ways to find one only grows.
+
+   Inverted, an unknown origin is LIVE: it registers a device, spends a
+   slot and shows up on the dashboard like anywhere else. Reaching a
+   preview stops being worth anything. The exemption is now a short list
+   somebody has to be deliberately added to, which is how a privilege
+   should read. (file:// reports an empty hostname.) */
+const PREVIEW_HOSTS = ['dev.mabyo.pages.dev', 'localhost', '127.0.0.1', '[::1]', ''];
+const IS_LIVE = !PREVIEW_HOSTS.includes(location.hostname);
 /* Access used to be a door: premium in, everyone else out. It is a ceiling
    now. Anyone signed in may run a session; a free account is capped at
    FREE_COURTS and the organiser lifts it. Set by checkAccess, read by
@@ -3346,14 +3358,21 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
     const installed = !!(window.matchMedia &&
       matchMedia('(display-mode: standalone)').matches);
 
-    let tz = '', cores = '', mem = '', depth = '';
-    try{ tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '' }catch(_){}
+    /* Timezone was in here and should never have been. Every other signal
+       is a property of the hardware or the software and travels with it;
+       the timezone is a property of where the device happens to BE. A host
+       flying between timezones changed fingerprint, and if they had also
+       cleared their storage they came back as a brand new device --
+       burning a slot and reading on the dashboard as account sharing.
+       It discriminated nothing either: two phones in the same sports hall
+       always agreed on it. Pure cost, no benefit. */
+    let cores = '', mem = '', depth = '';
     try{ cores = String(navigator.hardwareConcurrency || '') }catch(_){}
     try{ mem = String(navigator.deviceMemory || '') }catch(_){}
     try{ depth = String(screen.colorDepth || '') }catch(_){}
 
     const fp = await hashFp([model, plat, screen_, dpr, browser,
-                             cores, mem, tz, depth, navigator.language||''].join('|'));
+                             cores, mem, depth, navigator.language||''].join('|'));
 
     const label = [model, plat + (osver ? ' ' + osver : ''), screen_, browser,
                    installed ? 'installed' : ''].filter(Boolean).join(' · ');
@@ -3457,6 +3476,29 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
     PREMIUM = paid;
 
     if(row.suspended) return { state:'suspended' };
+
+    /* A preview build is for the people building it. It runs unreleased
+       code against the real database, so a host who wandered in could run
+       a real night on something half-finished -- and before the IS_LIVE
+       test was inverted, could do it outside their device cap entirely.
+
+       Gated on preview_ok OR is_admin rather than is_admin alone, because
+       "may try an unreleased build" and "may administer every account" are
+       different permissions and must not be the same switch: the day a
+       trusted host is asked to test something, the alternative would be
+       handing them the whole dashboard.
+
+       Fails CLOSED. If the question cannot be answered -- offline, a bad
+       response, anything -- the answer is no. A gate that opens when it is
+       confused is not a gate. */
+    if(!IS_LIVE){
+      try{
+        const pq = await sbFetch('/rest/v1/hosts?select=is_admin,preview_ok&id=eq.' + A.id);
+        if(!pq.ok) return { state:'preview_only' };
+        const p = ((await pq.json().catch(() => null)) || [])[0];
+        if(!p || !(p.is_admin || p.preview_ok)) return { state:'preview_only' };
+      }catch(_){ return { state:'preview_only' }; }
+    }
 
     // Is THIS DEVICE still allowed? Asked every time the gate is considered,
     // so a removed device can never slip through on a quick re-login.
@@ -3952,6 +3994,12 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
           load(); render();
         }
         openApp();
+        break;
+      case 'preview_only':
+        showLocked('Test build',
+          'This address is a test copy of Mabyo used for trying changes '+
+          'before they ship. It is not the app.<br><br>'+
+          'Open <b>mabyo.id</b> to run your session.', false);
         break;
       case 'device_booted':
         bootedHere();
