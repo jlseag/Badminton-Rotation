@@ -83,5 +83,56 @@ t = run(gone, function(){ gone.g.restore('host-1'); gone.g.boot(true); });
 ok('removal screen shown', t.indexOf('LOCK:This device was removed') >= 0, t);
 ok('the app never painted', t.indexOf('APP') < 0, t);
 
+
+
+/* ── 7. the preview gate ─────────────────────────────────────────────
+   A preview runs unreleased code against the real database. Before the
+   IS_LIVE test was inverted it also ran OUTSIDE the device cap, so any
+   host who found the URL had a free, invisible session. These assert the
+   gate itself: who gets in, who does not, and what happens when the
+   question cannot be answered. */
+print('\n7. Who may use a preview build');
+var PREVIEW = 'dev.mabyo.pages.dev';
+
+server.reset(); server.put('k1', false, false);
+server.s.is_admin = false; server.s.preview_ok = false;
+var stranger = makeGateDevice(server, 'k1', PREVIEW);
+t = run(stranger, function(){ stranger.g.restore('host-1'); stranger.g.boot(true); });
+ok('an ordinary host is turned away', t.indexOf('LOCK:Test build') >= 0, t);
+ok('and the app never painted', t.indexOf('APP') < 0, t);
+
+server.reset(); server.put('k2', false, false);
+server.s.is_admin = true;
+var admin = makeGateDevice(server, 'k2', PREVIEW);
+t = run(admin, function(){ admin.g.restore('host-1'); admin.g.boot(true); });
+ok('an admin gets in', t.indexOf('APP') >= 0, t);
+
+server.reset(); server.put('k3', false, false);
+server.s.is_admin = false; server.s.preview_ok = true;
+var tester = makeGateDevice(server, 'k3', PREVIEW);
+t = run(tester, function(){ tester.g.restore('host-1'); tester.g.boot(true); });
+ok('a flagged tester gets in WITHOUT being an admin', t.indexOf('APP') >= 0, t);
+
+/* The same account, same everything, on the real address. */
+server.reset(); server.put('k4', false, false);
+server.s.is_admin = false; server.s.preview_ok = false;
+var onLive = makeGateDevice(server, 'k4', 'mabyo.id');
+t = run(onLive, function(){ onLive.g.restore('host-1'); onLive.g.boot(true); });
+ok('and is unaffected on mabyo.id', t.indexOf('APP') >= 0 &&
+   t.indexOf('LOCK:Test build') < 0, t);
+
+/* ── 8. an origin nobody named ───────────────────────────────────────
+   The bug this replaced: anything that was not mabyo.id got a free pass.
+   A per-commit preview URL must now behave as LIVE -- governed, counted,
+   visible -- rather than silently exempt. */
+print('\n8. An unnamed origin is live, not exempt');
+server.reset(); server.put('k5', true, false);     // booted on the live cap
+server.s.is_admin = false; server.s.preview_ok = false;
+var unknown = makeGateDevice(server, 'k5', 'a1b2c3d4.mabyo.pages.dev');
+t = run(unknown, function(){ unknown.g.restore('host-1'); unknown.g.boot(true); });
+ok('the device cap still applies there',
+   t.indexOf('LOCK:Signed in somewhere else') >= 0, t);
+ok('so it is not a way around the cap', t.indexOf('APP') < 0, t);
+
 print('\n' + pass + ' passed' + (fail ? ', ' + fail + ' FAILED' : ''));
 if (fail) quit(1);

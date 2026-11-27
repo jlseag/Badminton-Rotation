@@ -14,6 +14,7 @@
 function makeGateServer(){
   var st = {
     plan: 'active', expires_at: null, suspended: false,
+    is_admin: false, preview_ok: false,
     devices: [],                 // [{ key, booted, revoked }]
     cap: 1,
     calls: []                    // every device_touch: { reclaim }
@@ -33,6 +34,9 @@ function makeGateServer(){
 
     handle: function(path, opts){
       var body = opts && opts.body ? JSON.parse(opts.body) : null;
+
+      if (path.indexOf('/rest/v1/hosts') === 0)
+        return ok([{ is_admin: st.is_admin, preview_ok: st.preview_ok }]);
 
       if (path.indexOf('/rest/v1/admin_overview') === 0)
         return ok([{ plan: st.plan, expires_at: st.expires_at, suspended: st.suspended }]);
@@ -80,7 +84,8 @@ function makeGateServer(){
   }
 }
 
-function makeGateDevice(server, key){
+function makeGateDevice(server, key, host){
+  host = host || 'mabyo.id';
   var app = readFile('dev/_app.js'), gate = readFile('dev/_gate.js');
 
   /* The gate's whole point is that nothing inside it is reachable, so the
@@ -159,8 +164,8 @@ function makeGateDevice(server, key){
 
   var win = { document:doc, localStorage:ls, addEventListener:function(){},
     matchMedia:function(){return {matches:false,addEventListener:function(){}}},
-    location:{href:'https://mabyo.id/',hostname:'mabyo.id',host:'mabyo.id',
-      protocol:'https:',origin:'https://mabyo.id',pathname:'/',search:'',hash:'',
+    location:{href:'https://'+host+'/',hostname:host,host:host,
+      protocol:'https:',origin:'https://'+host,pathname:'/',search:'',hash:'',
       reload:function(){},replace:function(){},assign:function(){}},
     navigator:{userAgent:'jsc',onLine:true,
       serviceWorker:{register:function(){return {then:function(){return {catch:function(){}}}}}}},
