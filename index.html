@@ -567,7 +567,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v79';   // bump together with V in sw.js
+const BUILD='v80';   // bump together with V in sw.js
 /* The live site, and nothing else. A preview branch, a local server and a
    file:// copy are all "not live" and say so in the header. Hard-coded
    rather than configured: a flag you can set wrongly is worse than none.
@@ -639,7 +639,12 @@ let S=defState(), tab='game', sel=null, dragId=null;
    result. load() therefore draws anything left empty. */
 let savedPanel={};
 
-function save(){try{localStorage.setItem(LS,JSON.stringify(S))}catch(e){}}
+function save(){try{localStorage.setItem(LS,JSON.stringify(S))}catch(e){}
+  /* The one chokepoint every mutation already goes through, so the sync
+     layer never has to be wired into each of the dozen places the roster
+     is edited. It compares a signature and does nothing when nothing that
+     syncs has changed, which is most calls. */
+  if(typeof window.mabyoRosterChanged === 'function') window.mabyoRosterChanged();}
 function load(){
   try{const r=localStorage.getItem(LS);
     const o=r?JSON.parse(r):null; if(o&&o.v===1){S=Object.assign(defState(),o);
@@ -3474,6 +3479,116 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
     return { state:'ok' };
   }
 
+  /* ── roster sync ───────────────────────────────────────────────────
+     What travels is ONLY the roster: every name this host has entered, with
+     its level, in ranking order. Not tonight's lineup, not the courts, not
+     the results -- those are wiped by New session anyway, so a second device
+     starting a fresh night is not missing anything by not having them.
+
+     The roster is sent as ONE document rather than a row per player, because
+     the array's ORDER is the ranking. Order is a property of the whole list,
+     not of any player in it, so a per-row merge would have to reconstruct it
+     from sort keys that two devices could disagree about. A document cannot
+     disagree with itself.
+
+     Conflicts are merged, never put to the host. A roster is a set of names:
+     if this device added Budi while the other added Sari, the answer is
+     obviously both, and nobody should be made to adjudicate that. The
+     server's order wins for names both devices know, and names only this
+     device has go in at the top -- which is where new names go anyway. The
+     one thing that must never happen is a name quietly disappearing, and a
+     union cannot do that. */
+  const SYNC_LS = 'badminton_sync_v1';   // { rev, sig } — what we last agreed on
+
+  // Short keys: this is sent on every roster edit, and `n`/`t` is half the bytes.
+  const rosterDoc = () => (S.roster || [])
+    .filter(r => r && r.name).map(r => ({ n: String(r.name), t: r.tier || 'int' }));
+  const rosterSig = d => JSON.stringify(d);
+  const syncRead  = () => read(SYNC_LS) || { rev: 0, sig: '' };
+
+  let pushTimer = null, pushing = false, applying = false;
+
+  /* Union, keeping the server's order for anyone it knows about. sortRoster()
+     is the app's own normalisation -- a STABLE sort by tier -- so running it
+     drops the newcomers into their tier groups without disturbing the order
+     the server sent for everyone else. */
+  function mergeRoster(doc){
+    const srv = (Array.isArray(doc) ? doc : [])
+      .filter(x => x && x.n).map(x => ({ name: String(x.n), tier: x.t || 'int' }));
+    const known = new Set(srv.map(r => rkey(r.name)));
+    const mine  = (S.roster || []).filter(r => r && !known.has(rkey(r.name)));
+    S.roster = mine.concat(srv);
+    sortRoster();
+    /* save() tells the sync layer the roster changed, which is true but not
+       useful here: what changed is what we just received. Without this the
+       merge schedules a push of the document we are still in the middle of
+       accepting, on the revision we have not recorded yet -- so the server
+       rejects it and we do the whole dance again for nothing. */
+    applying = true;
+    try{ save(); if(typeof render === 'function') render(); }
+    finally{ applying = false; }
+  }
+
+  async function rosterPull(){
+    if(!A || !IS_LIVE) return;
+    try{
+      const r = await sbFetch('/rest/v1/host_rosters?select=data,rev&host_id=eq.' + A.id);
+      if(!r.ok) return;
+      const row = ((await r.json().catch(() => null)) || [])[0];
+      const st  = syncRead();
+      // Nothing up there yet: this device is the first to sign in, so it seeds.
+      if(!row){ if((S.roster || []).length) await rosterPush(true); return; }
+      if(row.rev === st.rev) return;                      // already in step
+      mergeRoster(row.data);
+      write(SYNC_LS, { rev: row.rev, sig: rosterSig(rosterDoc()) });
+      // The merge may have added names the server has not seen. Only then push.
+      await rosterPush(false);
+    }catch(_){ /* offline: the next open tries again */ }
+  }
+
+  async function rosterPush(force, depth){
+    if(!A || !IS_LIVE || pushing) return;
+    const doc = rosterDoc(), sig = rosterSig(doc), st = syncRead();
+    if(!force && sig === st.sig) return;      // nothing that syncs has changed
+    pushing = true;
+    try{
+      const r = await sbFetch('/rest/v1/rpc/roster_push', { method:'POST',
+        body: JSON.stringify({ p_data: doc, p_base: st.rev, p_device: deviceKey() }) });
+      if(r.ok){
+        const back = ((await r.json().catch(() => null)) || [])[0];
+        if(back && back.ok){
+          write(SYNC_LS, { rev: back.rev, sig });
+        }else if(back && (depth || 0) < 3){
+          /* Rejected: the other device moved the roster on while we were
+             editing. Take theirs, fold ours in, send the union back. Bounded,
+             so a server that keeps saying no cannot spin. */
+          mergeRoster(back.data);
+          write(SYNC_LS, { rev: back.rev, sig: rosterSig(rosterDoc()) });
+          pushing = false;
+          return rosterPush(true, (depth || 0) + 1);
+        }
+      }
+    }catch(_){ /* offline: the signature stays stale, so the next save retries */ }
+    pushing = false;
+  }
+
+  /* Called from save(), which means on nearly every interaction. It has to
+     stay cheap: the signature check is the whole point, and the debounce
+     means renaming five players is one upload rather than five. */
+  window.mabyoRosterChanged = function(){
+    if(!A || !IS_LIVE || applying) return;
+    if(rosterSig(rosterDoc()) === syncRead().sig) return;
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(() => rosterPush(false), 1500);
+  };
+
+  /* A phone that has been in a pocket all week should not run on a stale
+     roster. Pull when the app opens, and whenever it comes back to the
+     foreground -- which on a phone is what "opening it" actually means. */
+  document.addEventListener('visibilitychange', () => {
+    if(!document.hidden && A && gate.hidden) rosterPull();
+  });
+
   /* ── background bookkeeping (never blocks the UI) ──────────────────── */
   let lastTouch = 0;
   async function touch(){
@@ -3560,6 +3675,7 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
   function openApp(){
     setGate(false); acctBtn.hidden = false;
     touch();
+    rosterPull();
   }
 
   /* The organiser removed this device. The session is already dead server
@@ -3600,7 +3716,10 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
 
   function signOut(){
     A = null; C = null; lastTouch = 0;   // a fresh sign-in re-checks the device
-    drop(AUTH_LS); drop('badminton_ent_v1');
+    /* The agreed revision belongs to the account that just left. Keeping it
+       would let the next account signed in here push this roster over its own
+       on a base revision it never saw. */
+    drop(AUTH_LS); drop('badminton_ent_v1'); drop(SYNC_LS);
     showSignIn('');
   }
 
