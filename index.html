@@ -567,7 +567,7 @@ html.gated body{padding-bottom:0}
    BADMINTON ROTATION & POINTS — engine + UI (offline, localStorage)
    ========================================================================= */
 const LS='badminton_rotation_v1';
-const BUILD='v80';   // bump together with V in sw.js
+const BUILD='v81';   // bump together with V in sw.js
 /* The live site, and nothing else. A preview branch, a local server and a
    file:// copy are all "not live" and say so in the header. Hard-coded
    rather than configured: a flag you can set wrongly is worse than none.
@@ -3591,12 +3591,12 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
 
   /* ── background bookkeeping (never blocks the UI) ──────────────────── */
   let lastTouch = 0;
-  async function touch(){
+  async function touch(reclaim){
     if(!A) return;
     // Heartbeat, not a tracker. Every five minutes while the app is open is
     // enough for the dashboard to show who is active; switching tabs twenty
     // times a minute should not write twenty rows.
-    if(Date.now() - lastTouch < 50000) return;
+    if(!reclaim && Date.now() - lastTouch < 50000) return;
     lastTouch = Date.now();
 
     /* A preview build must not leave a footprint in the live data.
@@ -3633,7 +3633,8 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
                                p_label: di.label, p_plat: di.plat,
                                p_osver: di.osver, p_screen: di.screen,
                                p_browser: di.browser, p_installed: di.installed,
-                               p_session_id: sessionId() })
+                               p_session_id: sessionId(),
+                               p_reclaim: !!reclaim })
       });
       // The row comes back, so the same request that says "still here" also
       // tells us whether we are still welcome. No extra round trip.
@@ -3689,11 +3690,11 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
   /* The account is open on more devices than its cap allows, and this one
      lost the slot. Deliberately NOT the same as a removal: nothing was
      taken away, the newest device simply wins, and taking the slot back is
-     one tap. device_touch() un-boots whoever calls it, so the button is
-     just a touch -- and the other device finds out on its next heartbeat,
-     within a minute. The heartbeat here stops on its own while the locked
-     screen is up (it is gated on `gate.hidden`), so the two devices cannot
-     sit in a loop stealing the slot from each other. */
+     one tap. Only that tap reclaims: an ordinary heartbeat REPORTS the
+     boot and changes nothing, so two devices cannot sit in a loop silently
+     stealing the slot back off each other -- which is what v80 did, in
+     place of ever kicking anyone out. The other device finds out on its
+     next heartbeat, within a minute. */
   function bootedHere(){
     lastTouch = 0;
     showLocked('Signed in somewhere else',
@@ -3708,7 +3709,7 @@ if('serviceWorker' in navigator && location.protocol.startsWith('http')){
     b.onclick = async () => {
       b.disabled = true; b.textContent = 'Checking…';
       lastTouch = 0;
-      const ok = await touch();
+      const ok = await touch(true);
       if(ok){ setGate(false); acctBtn.hidden = false; }
       else { b.disabled = false; b.textContent = 'Use this device'; }
     };
